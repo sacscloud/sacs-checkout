@@ -1,4 +1,4 @@
-# SACS CDN - Embedded Checkout Widget
+# SACS Embedded Checkout Widget
 
 Widget de checkout embebido para SACS (Sistema Avanzado de Comunicación Social). Plugin JavaScript standalone que permite integrar un carrito de compras completo y proceso de checkout en cualquier sitio web.
 
