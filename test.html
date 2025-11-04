@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SACS Checkout Widget - Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #1F2937;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #6B7280;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .info-box {
+            background: #F3F4F6;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .info-box h2 {
+            color: #374151;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #6B7280;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .info-box code {
+            background: #E5E7EB;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #DC2626;
+        }
+
+        #sacs-checkout-button {
+            margin-top: 20px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            color: #9CA3AF;
+            font-size: 0.9em;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #10B981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="badge">Test Environment</div>
+        <h1>SACS Checkout Widget</h1>
+        <p class="subtitle">Sistema Avanzado de Comunicación Social</p>
+
+        <div class="info-box">
+            <h2>Información de Test</h2>
+            <p><strong>Account ID:</strong> <code>pruebaskpop</code></p>
+            <p><strong>CDN:</strong> <code>cdn.jsdelivr.net</code></p>
+            <p><strong>Versión:</strong> <code>@latest</code></p>
+        </div>
+
+        <!-- SACS Embedded Checkout -->
+        <script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-cdn@latest/checkout-widget.js"></script>
+        <div id="sacs-checkout-button"></div>
+        <script>
+          sacsCheckout.init({ accountId: 'pruebaskpop' });
+        </script>
+
+        <div class="footer">
+            Página de prueba para el widget de checkout de SACS
+        </div>
+    </div>
+</body>
+</html>
