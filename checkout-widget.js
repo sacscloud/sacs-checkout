@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.1.1 - Items de carrito con fondo transparente
+ * Versión: 1.1.2 - Corregir textos en blanco
  */
 
 (function(window) {
@@ -18,9 +18,20 @@
             this.config = {
                 accountId: null,
                 products: [],
-                primaryColor: '#1F2937',
-                textColor: '#FFFFFF',
-                accentColor: '#000000'
+                drawerStyles: {
+                    backgroundColor: '#1F2937',
+                    primaryTextColor: '#FFFFFF',
+                    secondaryTextColor: '#9CA3AF',
+                    buttonBgColor: '#000000',
+                    buttonTextColor: '#FFFFFF',
+                    buttonHoverColor: '#374151'
+                },
+                checkoutButtonStyles: {
+                    text: 'Comprar Ahora',
+                    bgColor: '#000000',
+                    textColor: '#FFFFFF',
+                    size: 'medium'
+                }
             };
             this.cart = [];
             this.isOpen = false;
@@ -58,24 +69,27 @@
             // PASO 2: Aplicar opciones del código embed (override MongoDB)
             // Prioridad: código embed > MongoDB > default
             if (options.products) this.config.products = options.products;
-            if (options.primaryColor) this.config.primaryColor = options.primaryColor;
-            if (options.textColor) this.config.textColor = options.textColor;
-            if (options.accentColor) this.config.accentColor = options.accentColor;
-            if (options.buttonText) this.config.buttonText = options.buttonText;
-            if (options.buttonBgColor) this.config.buttonBgColor = options.buttonBgColor;
-            if (options.buttonTextColor) this.config.buttonTextColor = options.buttonTextColor;
-            if (options.buttonSize) this.config.buttonSize = options.buttonSize;
+
+            // Drawer styles (mantener retrocompatibilidad)
+            if (options.drawerStyles) {
+                this.config.drawerStyles = {...this.config.drawerStyles, ...options.drawerStyles};
+            }
+            if (options.primaryColor) this.config.drawerStyles.backgroundColor = options.primaryColor;
+            if (options.textColor) this.config.drawerStyles.primaryTextColor = options.textColor;
+            if (options.secondaryTextColor) this.config.drawerStyles.secondaryTextColor = options.secondaryTextColor;
+
+            // Checkout button styles (mantener retrocompatibilidad)
+            if (options.checkoutButtonStyles) {
+                this.config.checkoutButtonStyles = {...this.config.checkoutButtonStyles, ...options.checkoutButtonStyles};
+            }
+            if (options.buttonText) this.config.checkoutButtonStyles.text = options.buttonText;
+            if (options.buttonBgColor) this.config.checkoutButtonStyles.bgColor = options.buttonBgColor;
+            if (options.buttonTextColor) this.config.checkoutButtonStyles.textColor = options.buttonTextColor;
+            if (options.buttonSize) this.config.checkoutButtonStyles.size = options.buttonSize;
 
             console.log('📦 Productos cargados:', this.config.products);
-            console.log('🎨 Colores drawer:', {
-                primary: this.config.primaryColor,
-                text: this.config.textColor,
-                accent: this.config.accentColor
-            });
-            console.log('🎨 Colores botón:', {
-                bg: this.config.buttonBgColor,
-                text: this.config.buttonTextColor
-            });
+            console.log('🎨 Estilos drawer:', this.config.drawerStyles);
+            console.log('🎨 Estilos botón checkout:', this.config.checkoutButtonStyles);
 
             // Inicializar carrito con productos preconfigurados
             this.cart = this.config.products.map(product => ({
@@ -125,13 +139,15 @@
                         };
                     }));
 
-                    this.config.primaryColor = config.primaryColor || '#1F2937';
-                    this.config.textColor = config.textColor || '#FFFFFF';
-                    this.config.accentColor = config.accentColor || '#000000';
-                    this.config.buttonText = config.buttonText || 'Comprar Ahora';
-                    this.config.buttonBgColor = config.buttonBgColor || '#000000';
-                    this.config.buttonTextColor = config.buttonTextColor || '#FFFFFF';
-                    this.config.buttonSize = config.buttonSize || 'medium';
+                    // Cargar estilos del drawer
+                    if (config.drawerStyles) {
+                        this.config.drawerStyles = {...this.config.drawerStyles, ...config.drawerStyles};
+                    }
+
+                    // Cargar estilos del botón de checkout
+                    if (config.checkoutButtonStyles) {
+                        this.config.checkoutButtonStyles = {...this.config.checkoutButtonStyles, ...config.checkoutButtonStyles};
+                    }
 
                     console.log('✓ Configuración de eCommerce cargada desde MongoDB');
                 }
@@ -243,19 +259,20 @@
             if (!container) return;
 
             const button = document.createElement('button');
-            button.textContent = this.config.buttonText || 'Comprar Ahora';
+            const styles = this.config.checkoutButtonStyles;
+            button.textContent = styles.text || 'Comprar Ahora';
 
-            const padding = this.config.buttonSize === 'small' ? '8px 16px'
-                          : this.config.buttonSize === 'large' ? '16px 32px'
+            const padding = styles.size === 'small' ? '8px 16px'
+                          : styles.size === 'large' ? '16px 32px'
                           : '12px 24px';
 
-            const fontSize = this.config.buttonSize === 'small' ? '13px'
-                           : this.config.buttonSize === 'large' ? '18px'
+            const fontSize = styles.size === 'small' ? '13px'
+                           : styles.size === 'large' ? '18px'
                            : '15px';
 
             button.style.cssText = `
-                background: ${this.config.buttonBgColor || '#000000'};
-                color: ${this.config.buttonTextColor || '#FFFFFF'};
+                background: ${styles.bgColor || '#000000'};
+                color: ${styles.textColor || '#FFFFFF'};
                 padding: ${padding};
                 font-size: ${fontSize};
                 border: none;
@@ -336,7 +353,7 @@
                     bottom: 0;
                     width: 100%;
                     max-width: 640px;
-                    background: ${this.config.primaryColor || '#1F2937'};
+                    background: ${this.config.drawerStyles.backgroundColor || '#1F2937'};
                     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
                     z-index: 999999;
                     transform: translateX(100%);
@@ -344,7 +361,7 @@
                     display: flex;
                     flex-direction: column;
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                 }
 
                 .sacs-drawer.active {
@@ -369,8 +386,7 @@
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    color: ${this.config.textColor || '#FFFFFF'};
-                    opacity: 0.7;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     transition: opacity 0.2s;
                 }
 
@@ -381,7 +397,7 @@
                 .sacs-drawer-title {
                     font-size: 32px;
                     font-weight: 700;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin: 0 0 32px 0;
                 }
 
@@ -396,16 +412,18 @@
                     align-items: center;
                     gap: 12px;
                     font-size: 16px;
-                    color: rgba(255, 255, 255, 0.5);
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     transition: all 0.3s;
                 }
 
                 .sacs-step.active {
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
+                    opacity: 1;
                 }
 
                 .sacs-step.completed {
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
+                    opacity: 1;
                 }
 
                 .sacs-step-number {
@@ -423,13 +441,13 @@
                 }
 
                 .sacs-step.active .sacs-step-number {
-                    background: ${this.config.accentColor || '#000000'};
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    background: ${this.config.drawerStyles.buttonBgColor || '#000000'};
+                    color: ${this.config.drawerStyles.buttonTextColor || '#FFFFFF'};
                 }
 
                 .sacs-step.completed .sacs-step-number {
-                    background: ${this.config.accentColor || '#000000'};
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    background: ${this.config.drawerStyles.buttonBgColor || '#000000'};
+                    color: ${this.config.drawerStyles.buttonTextColor || '#FFFFFF'};
                 }
 
                 .sacs-step-check {
@@ -495,13 +513,13 @@
                 .sacs-item-name {
                     font-weight: 600;
                     font-size: 18px;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin: 0;
                 }
 
                 .sacs-item-variant {
                     font-size: 14px;
-                    color: rgba(255, 255, 255, 0.6);
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     margin: 0;
                 }
 
@@ -532,7 +550,7 @@
                     align-items: center;
                     justify-content: center;
                     font-size: 18px;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     transition: background 0.2s;
                     border-right: 1px solid rgba(255, 255, 255, 0.2);
                 }
@@ -555,19 +573,19 @@
                     width: 40px;
                     text-align: center;
                     font-weight: 500;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                 }
 
                 .sacs-item-price {
                     font-weight: 600;
                     font-size: 18px;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                 }
 
                 .sacs-drawer-footer {
                     padding: 24px 32px;
                     border-top: 1px solid rgba(255, 255, 255, 0.1);
-                    background: ${this.config.primaryColor || '#1F2937'};
+                    background: ${this.config.drawerStyles.backgroundColor || '#1F2937'};
                 }
 
                 .sacs-summary {
@@ -579,7 +597,7 @@
                     justify-content: space-between;
                     margin-bottom: 12px;
                     font-size: 16px;
-                    color: rgba(255, 255, 255, 0.7);
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                 }
 
                 .sacs-summary-row.total {
@@ -588,7 +606,7 @@
                     border-top: 1px solid rgba(255, 255, 255, 0.1);
                     font-size: 20px;
                     font-weight: 700;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                 }
 
                 .sacs-btn {
@@ -608,12 +626,12 @@
                 }
 
                 .sacs-btn-primary {
-                    background: ${this.config.accentColor || '#000000'};
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    background: ${this.config.drawerStyles.buttonBgColor || '#000000'};
+                    color: ${this.config.drawerStyles.buttonTextColor || '#FFFFFF'};
                 }
 
                 .sacs-btn-primary:hover {
-                    background: ${this.config.primaryColor || '#1F2937'};
+                    background: ${this.config.drawerStyles.buttonHoverColor || '#374151'};
                 }
 
                 .sacs-btn-primary:disabled {
@@ -624,7 +642,7 @@
                 .sacs-section-title {
                     font-size: 14px;
                     font-weight: 600;
-                    color: rgba(255, 255, 255, 0.7);
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                     margin: 0 0 16px 0;
@@ -638,7 +656,7 @@
                     display: block;
                     font-size: 15px;
                     font-weight: 500;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin-bottom: 8px;
                 }
 
@@ -677,7 +695,7 @@
                     background: none;
                     border: none;
                     font-size: 16px;
-                    color: #111827;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     cursor: pointer;
                     padding: 0;
                     margin-bottom: 32px;
@@ -686,13 +704,13 @@
                 }
 
                 .sacs-back-btn:hover {
-                    color: #6B7280;
+                    opacity: 1;
                 }
 
                 .sacs-page-title {
                     font-size: 32px;
                     font-weight: 700;
-                    color: #111827;
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin: 0 0 32px 0;
                 }
 
@@ -705,7 +723,7 @@
                     width: 80px;
                     height: 80px;
                     margin: 0 auto 32px;
-                    background: ${this.config.accentColor || '#000000'};
+                    background: ${this.config.drawerStyles.buttonBgColor || '#000000'};
                     border-radius: 8px;
                     display: flex;
                     align-items: center;
@@ -715,25 +733,26 @@
                 .sacs-success-check {
                     width: 48px;
                     height: 48px;
-                    stroke: ${this.config.textColor || '#FFFFFF'};
+                    stroke: ${this.config.drawerStyles.buttonTextColor || '#FFFFFF'};
                     stroke-width: 3;
                 }
 
                 .sacs-success-title {
                     font-size: 28px;
                     font-weight: 700;
-                    color: ${this.config.textColor || '#FFFFFF'};
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin: 0 0 12px 0;
                 }
 
                 .sacs-success-subtitle {
                     font-size: 16px;
-                    color: rgba(255, 255, 255, 0.7);
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     margin: 0 0 32px 0;
                 }
 
                 .sacs-order-box {
-                    background: #F9FAFB;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
                     padding: 32px;
                     border-radius: 8px;
                     margin-bottom: 32px;
@@ -742,7 +761,7 @@
                 .sacs-order-label {
                     font-size: 12px;
                     font-weight: 600;
-                    color: #9CA3AF;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                     margin: 0 0 8px 0;
@@ -751,13 +770,13 @@
                 .sacs-order-number {
                     font-size: 24px;
                     font-weight: 700;
-                    color: #111827;
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin: 0 0 16px 0;
                 }
 
                 .sacs-order-total {
                     font-size: 16px;
-                    color: #6B7280;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     margin: 0;
                 }
 
@@ -791,7 +810,8 @@
                 }
 
                 .sacs-info-box {
-                    background: #F9FAFB;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
                     padding: 20px;
                     border-radius: 8px;
                     margin-bottom: 16px;
@@ -803,7 +823,7 @@
                     width: 24px;
                     height: 24px;
                     flex-shrink: 0;
-                    color: #6B7280;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                 }
 
                 .sacs-info-content {
@@ -813,13 +833,13 @@
                 .sacs-info-title {
                     font-size: 15px;
                     font-weight: 600;
-                    color: #111827;
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin: 0 0 4px 0;
                 }
 
                 .sacs-info-text {
                     font-size: 14px;
-                    color: #6B7280;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     margin: 0;
                 }
 
@@ -842,7 +862,7 @@
                 .sacs-secure-text {
                     text-align: center;
                     font-size: 13px;
-                    color: #9CA3AF;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     margin-top: 12px;
                 }
 
@@ -1297,7 +1317,7 @@
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23016FD0' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='20' font-family='Arial' font-size='10' font-weight='bold' fill='white' text-anchor='middle'%3EAMEX%3C/text%3E%3C/svg%3E" alt="American Express">
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23003087' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='14' font-family='Arial' font-size='8' font-weight='bold' fill='%23009CDE' text-anchor='middle'%3EPayPal%3C/text%3E%3C/svg%3E" alt="PayPal">
                         </div>
-                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.1.1</p>
+                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.2.0</p>
                     ` : ''}
                 </div>
             `;
