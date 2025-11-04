@@ -19,9 +19,9 @@
                 accountId: null,
                 products: [],
                 drawerStyles: {
-                    backgroundColor: '#1F2937',
-                    primaryTextColor: '#FFFFFF',
-                    secondaryTextColor: '#9CA3AF',
+                    backgroundColor: '#FFFFFF',
+                    primaryTextColor: '#000000',
+                    secondaryTextColor: '#6B7280',
                     buttonBgColor: '#000000',
                     buttonTextColor: '#FFFFFF',
                     buttonHoverColor: '#374151'
