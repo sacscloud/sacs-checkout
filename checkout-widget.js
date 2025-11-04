@@ -663,23 +663,24 @@
                 .sacs-form-input {
                     width: 100%;
                     padding: 12px 16px;
-                    border: 1px solid #E5E7EB;
+                    border: 1px solid ${this.config.drawerStyles.secondaryTextColor || '#6B7280'};
                     border-radius: 4px;
                     font-size: 15px;
                     font-family: inherit;
                     transition: all 0.2s;
-                    background: white;
+                    background: transparent;
                     box-sizing: border-box;
-                    color: #111827;
+                    color: ${this.config.drawerStyles.primaryTextColor || '#000000'};
                 }
 
                 .sacs-form-input::placeholder {
-                    color: #9CA3AF;
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#6B7280'};
+                    opacity: 0.6;
                 }
 
                 .sacs-form-input:focus {
                     outline: none;
-                    border-color: #111827;
+                    border-color: ${this.config.drawerStyles.buttonBgColor || '#000000'};
                 }
 
                 .sacs-form-row {
@@ -802,7 +803,7 @@
                 .sacs-barcode {
                     width: 300px;
                     height: 60px;
-                    background: white;
+                    background: transparent;
                     border-radius: 4px;
                     display: flex;
                     align-items: center;
@@ -891,9 +892,9 @@
 
                 .sacs-stripe-element {
                     padding: 12px 16px;
-                    border: 1px solid #E5E7EB;
+                    border: 1px solid ${this.config.drawerStyles.secondaryTextColor || '#6B7280'};
                     border-radius: 4px;
-                    background: white;
+                    background: transparent;
                 }
 
                 @media (max-width: 640px) {
