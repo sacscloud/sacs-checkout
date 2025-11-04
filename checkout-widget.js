@@ -40,38 +40,42 @@
         async init(options) {
             console.log('🔧 Init widget con opciones:', options);
 
-            // Si solo se pasa accountId (sin products), resetear config para forzar recarga desde MongoDB
-            if (options.accountId && !options.products) {
-                console.log('🔄 Reseteando config para recarga completa desde MongoDB');
-                this.config = {
-                    accountId: options.accountId,
-                    products: [],
-                    primaryColor: '#1F2937',
-                    textColor: '#FFFFFF',
-                    accentColor: '#000000'
-                };
-            } else {
-                this.config = { ...this.config, ...options };
-            }
+            // Guardar accountId
+            this.config.accountId = options.accountId;
 
-            // SIEMPRE cargar configuraciones desde MongoDB
+            // PASO 1: Cargar configuraciones desde MongoDB (si hay accountId)
             if (options.accountId) {
                 console.log('📡 Cargando Stripe config...');
                 await this.loadStripeConfig(options.accountId);
 
                 console.log('📡 Cargando Account Defaults (almacén, sucursal, etc.)...');
                 await this.loadAccountDefaults(options.accountId);
-            }
 
-            // Cargar configuración de productos si no se pasaron
-            if (options.accountId && !options.products) {
                 console.log('📡 Cargando eCommerce config (productos, colores, etc.)...');
                 await this.loadEcommerceConfig(options.accountId);
-            } else {
-                console.log('⚠️ NO se carga eCommerce config. accountId:', options.accountId, 'products:', options.products);
             }
 
+            // PASO 2: Aplicar opciones del código embed (override MongoDB)
+            // Prioridad: código embed > MongoDB > default
+            if (options.products) this.config.products = options.products;
+            if (options.primaryColor) this.config.primaryColor = options.primaryColor;
+            if (options.textColor) this.config.textColor = options.textColor;
+            if (options.accentColor) this.config.accentColor = options.accentColor;
+            if (options.buttonText) this.config.buttonText = options.buttonText;
+            if (options.buttonBgColor) this.config.buttonBgColor = options.buttonBgColor;
+            if (options.buttonTextColor) this.config.buttonTextColor = options.buttonTextColor;
+            if (options.buttonSize) this.config.buttonSize = options.buttonSize;
+
             console.log('📦 Productos cargados:', this.config.products);
+            console.log('🎨 Colores drawer:', {
+                primary: this.config.primaryColor,
+                text: this.config.textColor,
+                accent: this.config.accentColor
+            });
+            console.log('🎨 Colores botón:', {
+                bg: this.config.buttonBgColor,
+                text: this.config.buttonTextColor
+            });
 
             // Inicializar carrito con productos preconfigurados
             this.cart = this.config.products.map(product => ({
@@ -82,10 +86,10 @@
             // Cargar Stripe.js (esperar a que termine)
             await this.loadStripe();
 
-            // Inyectar estilos
+            // Inyectar estilos (después de tener todos los colores)
             this.injectStyles();
 
-            // Renderizar botón si existe contenedor
+            // Renderizar botón (después de tener todos los colores)
             this.renderButton();
         }
 
@@ -417,13 +421,13 @@
                 }
 
                 .sacs-step.active .sacs-step-number {
-                    background: #111827;
-                    color: white;
+                    background: ${this.config.accentColor || '#000000'};
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-step.completed .sacs-step-number {
-                    background: #111827;
-                    color: white;
+                    background: ${this.config.accentColor || '#000000'};
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-step-check {
@@ -598,12 +602,12 @@
                 }
 
                 .sacs-btn-primary {
-                    background: #111827;
-                    color: white;
+                    background: ${this.config.accentColor || '#000000'};
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-btn-primary:hover {
-                    background: #1F2937;
+                    background: ${this.config.primaryColor || '#1F2937'};
                 }
 
                 .sacs-btn-primary:disabled {
@@ -695,7 +699,7 @@
                     width: 80px;
                     height: 80px;
                     margin: 0 auto 32px;
-                    background: #111827;
+                    background: ${this.config.accentColor || '#000000'};
                     border-radius: 8px;
                     display: flex;
                     align-items: center;
@@ -705,7 +709,7 @@
                 .sacs-success-check {
                     width: 48px;
                     height: 48px;
-                    stroke: white;
+                    stroke: ${this.config.textColor || '#FFFFFF'};
                     stroke-width: 3;
                 }
 
