@@ -1003,7 +1003,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">Carrito de Compras</h1>
+                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.2.0</span></h1>
                     ${this.renderStepper()}
                 </div>
                 ${this.renderBody()}
