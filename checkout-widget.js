@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.0.0
+ * Versión: 1.1.0 - Sistema de colores dinámicos
  */
 
 (function(window) {
@@ -336,7 +336,7 @@
                     bottom: 0;
                     width: 100%;
                     max-width: 640px;
-                    background: white;
+                    background: ${this.config.primaryColor || '#1F2937'};
                     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
                     z-index: 999999;
                     transform: translateX(100%);
@@ -344,6 +344,7 @@
                     display: flex;
                     flex-direction: column;
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-drawer.active {
@@ -352,7 +353,7 @@
 
                 .sacs-drawer-header {
                     padding: 32px 32px 24px;
-                    border-bottom: 1px solid #E5E7EB;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                     position: relative;
                 }
 
@@ -368,18 +369,19 @@
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    color: #6B7280;
-                    transition: color 0.2s;
+                    color: ${this.config.textColor || '#FFFFFF'};
+                    opacity: 0.7;
+                    transition: opacity 0.2s;
                 }
 
                 .sacs-close-btn:hover {
-                    color: #111827;
+                    opacity: 1;
                 }
 
                 .sacs-drawer-title {
                     font-size: 32px;
                     font-weight: 700;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                     margin: 0 0 32px 0;
                 }
 
@@ -394,16 +396,16 @@
                     align-items: center;
                     gap: 12px;
                     font-size: 16px;
-                    color: #9CA3AF;
+                    color: rgba(255, 255, 255, 0.5);
                     transition: all 0.3s;
                 }
 
                 .sacs-step.active {
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-step.completed {
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-step-number {
@@ -446,12 +448,15 @@
                 .sacs-cart-item {
                     display: flex;
                     gap: 20px;
-                    padding: 24px 0;
-                    border-bottom: 1px solid #E5E7EB;
+                    padding: 24px;
+                    margin-bottom: 16px;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
                 }
 
                 .sacs-cart-item:first-child {
-                    padding-top: 0;
+                    padding: 24px;
                 }
 
                 .sacs-item-image {
@@ -560,8 +565,8 @@
 
                 .sacs-drawer-footer {
                     padding: 24px 32px;
-                    border-top: 1px solid #E5E7EB;
-                    background: white;
+                    border-top: 1px solid rgba(255, 255, 255, 0.1);
+                    background: ${this.config.primaryColor || '#1F2937'};
                 }
 
                 .sacs-summary {
@@ -573,16 +578,16 @@
                     justify-content: space-between;
                     margin-bottom: 12px;
                     font-size: 16px;
-                    color: #6B7280;
+                    color: rgba(255, 255, 255, 0.7);
                 }
 
                 .sacs-summary-row.total {
                     margin-top: 12px;
                     padding-top: 12px;
-                    border-top: 1px solid #E5E7EB;
+                    border-top: 1px solid rgba(255, 255, 255, 0.1);
                     font-size: 20px;
                     font-weight: 700;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-btn {
@@ -618,7 +623,7 @@
                 .sacs-section-title {
                     font-size: 14px;
                     font-weight: 600;
-                    color: #6B7280;
+                    color: rgba(255, 255, 255, 0.7);
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                     margin: 0 0 16px 0;
@@ -632,7 +637,7 @@
                     display: block;
                     font-size: 15px;
                     font-weight: 500;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                     margin-bottom: 8px;
                 }
 
@@ -716,13 +721,13 @@
                 .sacs-success-title {
                     font-size: 28px;
                     font-weight: 700;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                     margin: 0 0 12px 0;
                 }
 
                 .sacs-success-subtitle {
                     font-size: 16px;
-                    color: #6B7280;
+                    color: rgba(255, 255, 255, 0.7);
                     margin: 0 0 32px 0;
                 }
 
