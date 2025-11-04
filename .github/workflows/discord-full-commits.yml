@@ -1,0 +1,64 @@
+name: Discord – Full commit messages
+
+on:
+  push:
+    branches:
+      - '**'  # Incluye todas las ramas (main, master, feature/*, hotfix/*, etc.)
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send each commit to Discord (full message with embeds)
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os, json, subprocess
+
+          webhook = os.environ["WEBHOOK"]
+          repo    = os.environ["REPO"]
+          branch  = os.environ["BRANCH"]
+
+          # Lee el payload del push
+          event_path = os.environ["GITHUB_EVENT_PATH"]
+          with open(event_path, "r", encoding="utf-8") as f:
+              ev = json.load(f)
+
+          commits = ev.get("commits", [])
+          if not commits:
+              exit(0)
+
+          for c in commits:
+              author = (
+                  (c.get("author") or {}).get("username")
+                  or (c.get("author") or {}).get("name")
+                  or "unknown"
+              )
+              url = c.get("url")
+              sha = (c.get("id") or "")[:7]
+              msg = c.get("message") or "(sin mensaje)"
+
+              # Discord: límite ~4096 chars por descripción de embed.
+              # Dividimos en trozos de 3800 para margen seguro.
+              chunks = [msg[i:i+3800] for i in range(0, len(msg), 3800)] or ["(sin mensaje)"]
+
+              for ch in chunks:
+                  payload = {
+                      "embeds": [{
+                          "title": f"{repo}:{branch} — {sha}",
+                          "url": url,
+                          "description": ch,
+                          "author": {"name": author}
+                      }]
+                  }
+                  subprocess.run(
+                      ["curl", "-sS",
+                       "-H", "Content-Type: application/json",
+                       "-d", json.dumps(payload),
+                       webhook],
+                      check=True
+                  )
+          PY
