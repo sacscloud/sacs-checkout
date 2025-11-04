@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.1.0 - Sistema de colores dinámicos
+ * Versión: 1.1.1 - Items de carrito con fondo transparente
  */
 
 (function(window) {
@@ -450,9 +450,9 @@
                     gap: 20px;
                     padding: 24px;
                     margin-bottom: 16px;
-                    background: white;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
                     border-radius: 8px;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
                 }
 
                 .sacs-cart-item:first-child {
@@ -495,13 +495,13 @@
                 .sacs-item-name {
                     font-weight: 600;
                     font-size: 18px;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                     margin: 0;
                 }
 
                 .sacs-item-variant {
                     font-size: 14px;
-                    color: #6B7280;
+                    color: rgba(255, 255, 255, 0.6);
                     margin: 0;
                 }
 
@@ -516,33 +516,34 @@
                     display: flex;
                     align-items: center;
                     gap: 0;
-                    border: 1px solid #E5E7EB;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
                     border-radius: 4px;
                     overflow: hidden;
+                    background: rgba(255, 255, 255, 0.05);
                 }
 
                 .sacs-qty-btn {
                     width: 40px;
                     height: 40px;
                     border: none;
-                    background: white;
+                    background: transparent;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     font-size: 18px;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                     transition: background 0.2s;
-                    border-right: 1px solid #E5E7EB;
+                    border-right: 1px solid rgba(255, 255, 255, 0.2);
                 }
 
                 .sacs-qty-btn:last-child {
                     border-right: none;
-                    border-left: 1px solid #E5E7EB;
+                    border-left: 1px solid rgba(255, 255, 255, 0.2);
                 }
 
                 .sacs-qty-btn:hover {
-                    background: #F9FAFB;
+                    background: rgba(255, 255, 255, 0.1);
                 }
 
                 .sacs-qty-btn:disabled {
@@ -554,13 +555,13 @@
                     width: 40px;
                     text-align: center;
                     font-weight: 500;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-item-price {
                     font-weight: 600;
                     font-size: 18px;
-                    color: #111827;
+                    color: ${this.config.textColor || '#FFFFFF'};
                 }
 
                 .sacs-drawer-footer {
@@ -1296,7 +1297,7 @@
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23016FD0' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='20' font-family='Arial' font-size='10' font-weight='bold' fill='white' text-anchor='middle'%3EAMEX%3C/text%3E%3C/svg%3E" alt="American Express">
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23003087' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='14' font-family='Arial' font-size='8' font-weight='bold' fill='%23009CDE' text-anchor='middle'%3EPayPal%3C/text%3E%3C/svg%3E" alt="PayPal">
                         </div>
-                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.1.0</p>
+                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.1.1</p>
                     ` : ''}
                 </div>
             `;
