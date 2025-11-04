@@ -17,7 +17,7 @@ Widget de checkout embebido para SACS (Sistema Avanzado de Comunicación Social)
 
 ```html
 <!-- Cargar el widget desde CDN -->
-<script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-cdn@latest/checkout-widget.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout/checkout-widget.js"></script>
 
 <!-- Contenedor para el botón de checkout -->
 <div id="sacs-checkout-button"></div>
