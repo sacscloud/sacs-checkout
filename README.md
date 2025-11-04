@@ -17,28 +17,17 @@ Widget de checkout embebido para SACS (Sistema Avanzado de Comunicación Social)
 
 ```html
 <!-- Cargar el widget desde CDN -->
-<script src="https://tu-cdn.com/checkout-widget.js"></script>
-
-<!-- Inicializar el widget -->
-<script>
-  SacsCheckout.init({
-    accountId: 'TU_ACCOUNT_ID',
-    products: [
-      {
-        id: 'producto-1',
-        name: 'Producto Demo',
-        price: 99.99,
-        image: 'https://ejemplo.com/imagen.jpg'
-      }
-    ],
-    primaryColor: '#1F2937',
-    textColor: '#FFFFFF',
-    accentColor: '#000000'
-  });
-</script>
+<script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-cdn@latest/checkout-widget.js"></script>
 
 <!-- Contenedor para el botón de checkout -->
 <div id="sacs-checkout-button"></div>
+
+<!-- Inicializar el widget (configuración minimalista) -->
+<script>
+  sacsCheckout.init({
+    accountId: 'TU_ACCOUNT_ID'
+  });
+</script>
 ```
 
 ### Opción 2: Local
