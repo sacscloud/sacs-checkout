@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.4.0 - Separar paso de información y pago, agregar firma digital
+ * Versión: 1.5.0 - Separar paso de información y pago, agregar firma digital
  */
 
 (function(window) {
@@ -1210,7 +1210,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.4.0</span></h1>
+                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.5.0</span></h1>
                     ${this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1649,7 +1649,7 @@
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23016FD0' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='20' font-family='Arial' font-size='10' font-weight='bold' fill='white' text-anchor='middle'%3EAMEX%3C/text%3E%3C/svg%3E" alt="American Express">
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23003087' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='14' font-family='Arial' font-size='8' font-weight='bold' fill='%23009CDE' text-anchor='middle'%3EPayPal%3C/text%3E%3C/svg%3E" alt="PayPal">
                         </div>
-                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.4.0</p>
+                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.5.0</p>
                     ` : ''}
                 </div>
             `;
