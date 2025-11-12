@@ -1586,7 +1586,24 @@
         }
 
         renderFooter() {
+            // Paso 2: Info del cliente - Solo botón sin resumen
+            if (this.currentStep === 2) {
+                return `
+                    <div class="sacs-drawer-footer">
+                        <button class="sacs-btn sacs-btn-primary" id="sacs-pay-btn">
+                            <span id="sacs-btn-text">Continuar</span>
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Paso 3: Firma - Sin footer (botones dentro del body)
             if (this.currentStep === 3) {
+                return '';
+            }
+
+            // Paso 5: Confirmación - Solo botón para cerrar
+            if (this.currentStep === 5) {
                 return `
                     <div class="sacs-drawer-footer">
                         <button class="sacs-btn sacs-btn-primary" onclick="sacsCheckout.close()">
@@ -1596,8 +1613,9 @@
                 `;
             }
 
+            // Paso 1 (Carrito) y Paso 4 (Pago): Mostrar resumen de precios
             const total = this.calculateTotal();
-            const subtotal = total / 1.1; // Asumiendo 10% de impuestos
+            const subtotal = total / 1.16; // IVA 16%
             const taxes = total - subtotal;
 
             return `
@@ -1621,7 +1639,7 @@
                             <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
                             <line x1="1" y1="10" x2="23" y2="10"></line>
                         </svg>
-                        <span id="sacs-btn-text">${this.currentStep === 1 ? 'Pagar' : 'Completar Compra'}</span>
+                        <span id="sacs-btn-text">${this.currentStep === 1 ? 'Continuar' : 'Completar Compra'}</span>
                         <span id="sacs-btn-spinner" style="display: none;" class="sacs-spinner"></span>
                     </button>
                     ${this.currentStep === 1 ? `
