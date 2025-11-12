@@ -1254,14 +1254,14 @@
                     <!-- Paso 4: Pago (SIEMPRE, FIJO) -->
                     <div class="sacs-step ${this.currentStep >= 4 ? 'active' : ''} ${this.currentStep > 4 ? 'completed' : ''}">
                         <div class="sacs-step-number">
-                            ${this.currentStep > 4 ? '<svg class="sacs-step-check" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '4'}
+                            ${this.currentStep > 4 ? '<svg class="sacs-step-check" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>' : (requiereFirma ? '4' : '3')}
                         </div>
                         <span class="sacs-step-label">Pago</span>
                     </div>
 
                     <!-- Paso 5: Confirmar -->
                     <div class="sacs-step ${this.currentStep >= 5 ? 'active' : ''}">
-                        <div class="sacs-step-number">5</div>
+                        <div class="sacs-step-number">${requiereFirma ? '5' : '4'}</div>
                         <span class="sacs-step-label">Confirmar</span>
                     </div>
                 </div>
