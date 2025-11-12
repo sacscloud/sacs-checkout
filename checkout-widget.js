@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.1.2 - Corregir textos en blanco
+ * Versión: 1.4.0 - Separar paso de información y pago, agregar firma digital
  */
 
 (function(window) {
@@ -35,7 +35,7 @@
             };
             this.cart = [];
             this.isOpen = false;
-            this.currentStep = 1; // 1: Carrito, 2: Pago, 3: Confirmar
+            this.currentStep = 1; // 1: Carrito, 2: Pago, 3: Firma (condicional), 4: Confirmar
             this.stripe = null;
             this.cardElement = null;
             this.customerInfo = {
@@ -46,6 +46,15 @@
                 codigoPostal: ''
             };
             this.orderId = null;
+
+            // Variables para manejo de firma
+            this.isDrawing = false;
+            this.lastX = 0;
+            this.lastY = 0;
+            this.firmaDibujada = false;
+            this.firmaBase64 = null;
+            this.paymentIntentId = null;
+            this.paymentTotal = 0;
         }
 
         async init(options) {
@@ -64,6 +73,9 @@
 
                 console.log('📡 Cargando eCommerce config (productos, colores, etc.)...');
                 await this.loadEcommerceConfig(options.accountId);
+
+                console.log('📡 Cargando Plantilla de Contratos...');
+                await this.loadPlantillaContratos(options.accountId);
             }
 
             // PASO 2: Aplicar opciones del código embed (override MongoDB)
@@ -213,6 +225,49 @@
                 console.error('Error cargando account defaults:', error);
                 throw error;
             }
+        }
+
+        async loadPlantillaContratos(accountId) {
+            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+
+            try {
+                const response = await fetch(`${API_URL}/rest/${accountId}/plantillas_contratos/aggregate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pipeline: [
+                            {
+                                $match: {
+                                    account: accountId,
+                                    estado: 'activa',
+                                    'config.general.opcionesEnvio.enPedido': true
+                                }
+                            },
+                            { $limit: 1 }
+                        ]
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                    this.config.plantillaContratos = result.data[0];
+                    console.log('✓ Plantilla de contratos cargada:', this.config.plantillaContratos.nombre);
+                } else {
+                    console.log('ℹ️ No hay plantilla de contratos activa configurada para envío en pedidos');
+                    this.config.plantillaContratos = null;
+                }
+            } catch (error) {
+                console.error('Error cargando plantilla de contratos:', error);
+                this.config.plantillaContratos = null;
+            }
+        }
+
+        requiereFirma() {
+            if (!this.config.plantillaContratos) return false;
+            if (!this.config.plantillaContratos.config) return false;
+            if (!this.config.plantillaContratos.config.general) return false;
+            return this.config.plantillaContratos.config.general.requiereFirma === true;
         }
 
         async loadProductImage(accountId, productKey, productType) {
@@ -921,7 +976,158 @@
                     .sacs-step-label {
                         display: none;
                     }
+
+                    .sacs-doc-info {
+                        font-size: 14px;
+                    }
+
+                    .sacs-firma-instructions {
+                        font-size: 13px;
+                        padding: 0.75rem;
+                    }
+
+                    .sacs-canvas-container {
+                        padding: 0.75rem;
+                    }
+
+                    #sacs-signature-canvas {
+                        max-width: 100%;
+                        height: 150px;
+                    }
+
+                    .sacs-firma-actions {
+                        flex-direction: column;
+                        gap: 0.5rem;
+                    }
+
+                    .sacs-firma-actions button {
+                        width: 100%;
+                    }
                 }
+
+                /* ==================== ESTILOS PARA FIRMA DIGITAL ==================== */
+
+                .sacs-doc-info {
+                    background: rgba(255, 255, 255, 0.05);
+                    padding: 1rem;
+                    border-radius: 8px;
+                    margin-bottom: 1rem;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                }
+
+                .sacs-doc-info p {
+                    margin: 0.5rem 0;
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
+                    font-size: 15px;
+                    line-height: 1.6;
+                }
+
+                .sacs-doc-info strong {
+                    color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
+                    font-weight: 600;
+                }
+
+                .sacs-firma-instructions {
+                    background: rgba(59, 130, 246, 0.1);
+                    border-left: 4px solid #3B82F6;
+                    padding: 1rem;
+                    margin-bottom: 1.5rem;
+                    border-radius: 4px;
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
+                }
+
+                .sacs-firma-instructions p {
+                    margin: 0;
+                    font-size: 14px;
+                    line-height: 1.5;
+                }
+
+                .sacs-canvas-container {
+                    position: relative;
+                    border: 2px dashed rgba(255, 255, 255, 0.2);
+                    border-radius: 8px;
+                    background: rgba(255, 255, 255, 0.03);
+                    padding: 1rem;
+                    margin-bottom: 1.5rem;
+                }
+
+                #sacs-signature-canvas {
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 4px;
+                    cursor: crosshair;
+                    touch-action: none;
+                    background: #FFFFFF;
+                    width: 100%;
+                    max-width: 540px;
+                    height: 200px;
+                    display: block;
+                }
+
+                .sacs-canvas-placeholder {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    color: #9CA3AF;
+                    pointer-events: none;
+                    font-size: 0.875rem;
+                    text-align: center;
+                }
+
+                .sacs-canvas-placeholder.hidden {
+                    display: none;
+                }
+
+                .sacs-firma-actions {
+                    display: flex;
+                    gap: 0.75rem;
+                    justify-content: flex-end;
+                }
+
+                .sacs-btn-secondary {
+                    padding: 0.75rem 1.5rem;
+                    background: rgba(255, 255, 255, 0.1);
+                    color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    border-radius: 6px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    font-size: 15px;
+                    transition: all 0.2s;
+                }
+
+                .sacs-btn-secondary:hover {
+                    background: rgba(255, 255, 255, 0.15);
+                }
+
+                .sacs-btn-primary {
+                    padding: 0.75rem 1.5rem;
+                    background: ${this.config.drawerStyles.buttonBgColor || '#000000'};
+                    color: ${this.config.drawerStyles.buttonTextColor || '#FFFFFF'};
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    font-size: 15px;
+                    transition: all 0.2s;
+                }
+
+                .sacs-btn-primary:hover:not(:disabled) {
+                    opacity: 0.9;
+                }
+
+                .sacs-btn-primary:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                /* ==================== FIN ESTILOS PARA FIRMA DIGITAL ==================== */
             `;
             document.head.appendChild(style);
         }
@@ -1004,7 +1210,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.2.0</span></h1>
+                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.4.0</span></h1>
                     ${this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1013,22 +1219,49 @@
         }
 
         renderStepper() {
+            const requiereFirma = this.requiereFirma();
+            // Nueva estructura: 1→2→3(firma condicional)→4(pago)→5(confirmar)
+            // Sin firma: 1→2→4→5
+
             return `
                 <div class="sacs-stepper">
+                    <!-- Paso 1: Carrito -->
                     <div class="sacs-step ${this.currentStep >= 1 ? 'active' : ''} ${this.currentStep > 1 ? 'completed' : ''}">
                         <div class="sacs-step-number">
                             ${this.currentStep > 1 ? '<svg class="sacs-step-check" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '1'}
                         </div>
                         <span class="sacs-step-label">Carrito</span>
                     </div>
+
+                    <!-- Paso 2: Información -->
                     <div class="sacs-step ${this.currentStep >= 2 ? 'active' : ''} ${this.currentStep > 2 ? 'completed' : ''}">
                         <div class="sacs-step-number">
                             ${this.currentStep > 2 ? '<svg class="sacs-step-check" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '2'}
                         </div>
+                        <span class="sacs-step-label">Info</span>
+                    </div>
+
+                    <!-- Paso 3: Firma (condicional) -->
+                    ${requiereFirma ? `
+                        <div class="sacs-step ${this.currentStep >= 3 ? 'active' : ''} ${this.currentStep > 3 ? 'completed' : ''}">
+                            <div class="sacs-step-number">
+                                ${this.currentStep > 3 ? '<svg class="sacs-step-check" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '3'}
+                            </div>
+                            <span class="sacs-step-label">Firma</span>
+                        </div>
+                    ` : ''}
+
+                    <!-- Paso 4: Pago (SIEMPRE, FIJO) -->
+                    <div class="sacs-step ${this.currentStep >= 4 ? 'active' : ''} ${this.currentStep > 4 ? 'completed' : ''}">
+                        <div class="sacs-step-number">
+                            ${this.currentStep > 4 ? '<svg class="sacs-step-check" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '4'}
+                        </div>
                         <span class="sacs-step-label">Pago</span>
                     </div>
-                    <div class="sacs-step ${this.currentStep >= 3 ? 'active' : ''}">
-                        <div class="sacs-step-number">3</div>
+
+                    <!-- Paso 5: Confirmar -->
+                    <div class="sacs-step ${this.currentStep >= 5 ? 'active' : ''}">
+                        <div class="sacs-step-number">5</div>
                         <span class="sacs-step-label">Confirmar</span>
                     </div>
                 </div>
@@ -1036,12 +1269,21 @@
         }
 
         renderBody() {
+            const requiereFirma = this.requiereFirma();
+
             switch (this.currentStep) {
                 case 1:
                     return this.renderCart();
                 case 2:
-                    return this.renderCheckout();
+                    return this.renderInfoCliente();
                 case 3:
+                    // Paso 3 solo existe si requiere firma
+                    return this.renderFirma();
+                case 4:
+                    // Paso 4 es SIEMPRE pago
+                    return this.renderPago();
+                case 5:
+                    // Paso 5 es confirmación
                     return this.renderSuccess();
                 default:
                     return this.renderCart();
@@ -1077,7 +1319,7 @@
             `;
         }
 
-        renderCheckout() {
+        renderInfoCliente() {
             return `
                 <div class="sacs-drawer-body">
                     <button class="sacs-back-btn" onclick="sacsCheckout.goToStep(1)">
@@ -1086,7 +1328,7 @@
                         </svg>
                         Atrás
                     </button>
-                    <h2 class="sacs-page-title">Pago</h2>
+                    <h2 class="sacs-page-title">Información de Envío</h2>
 
                     <div id="sacs-error-container"></div>
 
@@ -1119,13 +1361,84 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            `;
+        }
+
+        renderPago() {
+            return `
+                <div class="sacs-drawer-body">
+                    <button class="sacs-back-btn" onclick="sacsCheckout.volverDesdePago()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        Atrás
+                    </button>
+                    <h2 class="sacs-page-title">Pago</h2>
+
+                    <div id="sacs-error-container"></div>
 
                     <div>
-                        <h3 class="sacs-section-title">PAGO</h3>
+                        <h3 class="sacs-section-title">INFORMACIÓN DE PAGO</h3>
                         <div class="sacs-form-group">
                             <label class="sacs-form-label">Número de Tarjeta</label>
                             <div id="card-element" class="sacs-stripe-element"></div>
                         </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        renderFirma() {
+            const plantilla = this.config.plantillaContratos;
+            const titulo = plantilla?.contenidoInfo?.titulo || 'Documento de Firma';
+
+            return `
+                <div class="sacs-drawer-body">
+                    <button class="sacs-back-btn" onclick="sacsCheckout.goToStep(2)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        Atrás
+                    </button>
+
+                    <h2 class="sacs-page-title">Firma del Documento</h2>
+
+                    <div class="sacs-doc-info">
+                        <p><strong>Documento:</strong> ${titulo}</p>
+                        <p><strong>Cliente:</strong> ${this.customerInfo.nombre}</p>
+                        <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-MX', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                        })}</p>
+                    </div>
+
+                    <div class="sacs-firma-instructions">
+                        <p>✍️ Por favor, dibuje su firma en el recuadro de abajo usando el mouse o su dedo (en pantallas táctiles).</p>
+                    </div>
+
+                    <div class="sacs-canvas-container">
+                        <canvas id="sacs-signature-canvas" width="540" height="200"></canvas>
+                        <div id="sacs-canvas-placeholder" class="sacs-canvas-placeholder">
+                            Dibuje su firma aquí
+                        </div>
+                    </div>
+
+                    <div class="sacs-firma-actions">
+                        <button class="sacs-btn sacs-btn-secondary" onclick="sacsCheckout.limpiarFirma()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="1 4 1 10 7 10"></polyline>
+                                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                            </svg>
+                            Limpiar
+                        </button>
+                        <button id="sacs-confirmar-firma-btn" class="sacs-btn sacs-btn-primary" onclick="sacsCheckout.confirmarFirma()" disabled>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Confirmar Firma
+                        </button>
                     </div>
                 </div>
             `;
@@ -1318,7 +1631,7 @@
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23016FD0' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='20' font-family='Arial' font-size='10' font-weight='bold' fill='white' text-anchor='middle'%3EAMEX%3C/text%3E%3C/svg%3E" alt="American Express">
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23003087' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='14' font-family='Arial' font-size='8' font-weight='bold' fill='%23009CDE' text-anchor='middle'%3EPayPal%3C/text%3E%3C/svg%3E" alt="PayPal">
                         </div>
-                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.2.0</p>
+                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.4.0</p>
                     ` : ''}
                 </div>
             `;
@@ -1331,22 +1644,57 @@
 
             if (payBtn) {
                 payBtn.addEventListener('click', (e) => {
-                    console.log('Click en botón pagar - currentStep:', this.currentStep);
+                    console.log('Click en botón - currentStep:', this.currentStep);
                     e.preventDefault();
                     e.stopPropagation();
 
                     if (this.currentStep === 1) {
-                        console.log('Ir a paso 2');
+                        // Paso 1: Ir a paso 2 (info cliente)
+                        console.log('Ir a paso 2 (info cliente)');
                         this.goToStep(2);
+
                     } else if (this.currentStep === 2) {
+                        // Paso 2: Capturar info y decidir siguiente paso
+                        console.log('Capturando info del cliente...');
+
+                        // Capturar info del formulario
+                        this.customerInfo = {
+                            correo: document.getElementById('sacs-correo').value.trim(),
+                            nombre: document.getElementById('sacs-nombre').value.trim(),
+                            direccion: document.getElementById('sacs-direccion').value.trim(),
+                            ciudad: document.getElementById('sacs-ciudad').value.trim(),
+                            codigoPostal: document.getElementById('sacs-cp').value.trim()
+                        };
+
+                        if (!this.validateCustomerInfo()) {
+                            this.showError('Por favor completa todos los campos');
+                            return;
+                        }
+
+                        // Decidir: ¿Requiere firma?
+                        if (this.requiereFirma()) {
+                            console.log('Ir a paso 3 (firma)');
+                            this.goToStep(3);
+                        } else {
+                            console.log('Ir a paso 4 (pago)');
+                            this.goToStep(4);
+                        }
+
+                    } else if (this.currentStep === 4) {
+                        // Paso 4: Procesar pago
                         console.log('Procesar pago');
                         this.processPayment();
                     }
                 });
             }
 
-            // Inicializar Stripe si estamos en paso 2
-            if (this.currentStep === 2) {
+            // Inicializar canvas de firma si estamos en paso 3
+            if (this.currentStep === 3) {
+                setTimeout(() => this.initCanvasFirma(), 100);
+            }
+
+            // Inicializar Stripe si estamos en paso 4
+            if (this.currentStep === 4) {
                 setTimeout(() => this.initStripeElements(), 100);
             }
         }
@@ -1403,23 +1751,206 @@
             });
         }
 
+        // ==================== MÉTODOS DEL CANVAS DE FIRMA ====================
+
+        initCanvasFirma() {
+            const canvas = document.getElementById('sacs-signature-canvas');
+            if (!canvas) {
+                console.error('Canvas de firma no encontrado');
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Event listeners para mouse
+            canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
+            canvas.addEventListener('mousemove', (e) => this.draw(e));
+            canvas.addEventListener('mouseup', () => this.stopDrawing());
+            canvas.addEventListener('mouseleave', () => this.stopDrawing());
+
+            // Event listeners para touch (pantallas táctiles)
+            canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+            canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+            canvas.addEventListener('touchend', () => this.stopDrawing());
+            canvas.addEventListener('touchcancel', () => this.stopDrawing());
+
+            console.log('✓ Canvas de firma inicializado');
+        }
+
+        getMousePos(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: evt.clientX - rect.left,
+                y: evt.clientY - rect.top
+            };
+        }
+
+        getTouchPos(canvas, touch) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            };
+        }
+
+        startDrawing(e) {
+            this.isDrawing = true;
+            const canvas = document.getElementById('sacs-signature-canvas');
+            const pos = this.getMousePos(canvas, e);
+            this.lastX = pos.x;
+            this.lastY = pos.y;
+        }
+
+        draw(e) {
+            if (!this.isDrawing) return;
+
+            const canvas = document.getElementById('sacs-signature-canvas');
+            const ctx = canvas.getContext('2d');
+            const pos = this.getMousePos(canvas, e);
+
+            ctx.beginPath();
+            ctx.moveTo(this.lastX, this.lastY);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+
+            this.lastX = pos.x;
+            this.lastY = pos.y;
+
+            // Marcar que se ha dibujado algo
+            if (!this.firmaDibujada) {
+                this.firmaDibujada = true;
+                const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
+                if (btnConfirmar) btnConfirmar.disabled = false;
+
+                const placeholder = document.getElementById('sacs-canvas-placeholder');
+                if (placeholder) placeholder.style.display = 'none';
+            }
+        }
+
+        stopDrawing() {
+            this.isDrawing = false;
+        }
+
+        handleTouchStart(e) {
+            e.preventDefault();
+            const canvas = document.getElementById('sacs-signature-canvas');
+            const touch = e.touches[0];
+            const pos = this.getTouchPos(canvas, touch);
+            this.isDrawing = true;
+            this.lastX = pos.x;
+            this.lastY = pos.y;
+        }
+
+        handleTouchMove(e) {
+            if (!this.isDrawing) return;
+            e.preventDefault();
+
+            const canvas = document.getElementById('sacs-signature-canvas');
+            const ctx = canvas.getContext('2d');
+            const touch = e.touches[0];
+            const pos = this.getTouchPos(canvas, touch);
+
+            ctx.beginPath();
+            ctx.moveTo(this.lastX, this.lastY);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+
+            this.lastX = pos.x;
+            this.lastY = pos.y;
+
+            // Marcar que se ha dibujado algo
+            if (!this.firmaDibujada) {
+                this.firmaDibujada = true;
+                const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
+                if (btnConfirmar) btnConfirmar.disabled = false;
+
+                const placeholder = document.getElementById('sacs-canvas-placeholder');
+                if (placeholder) placeholder.style.display = 'none';
+            }
+        }
+
+        limpiarFirma() {
+            const canvas = document.getElementById('sacs-signature-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            this.firmaDibujada = false;
+            this.firmaBase64 = null;
+
+            const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
+            if (btnConfirmar) btnConfirmar.disabled = true;
+
+            const placeholder = document.getElementById('sacs-canvas-placeholder');
+            if (placeholder) placeholder.style.display = 'block';
+
+            console.log('Firma limpiada');
+        }
+
+        async confirmarFirma() {
+            if (!this.firmaDibujada) {
+                console.error('No hay firma dibujada');
+                return;
+            }
+
+            // Convertir canvas a base64
+            const canvas = document.getElementById('sacs-signature-canvas');
+            this.firmaBase64 = canvas.toDataURL('image/png');
+
+            console.log('✓ Firma capturada:', this.firmaBase64.substring(0, 50) + '...');
+
+            // Ir al paso 4 (Pago)
+            this.goToStep(4);
+        }
+
+        volverDesdePago() {
+            const requiereFirma = this.requiereFirma();
+
+            if (requiereFirma) {
+                // Si tiene firma, volver al paso 3 (firma)
+                this.goToStep(3);
+            } else {
+                // Si NO tiene firma, volver al paso 2 (info cliente)
+                this.goToStep(2);
+            }
+        }
+
+        async processPaymentWithSignature() {
+            try {
+                console.log('Creando pedido con firma...');
+
+                // Crear pedido CON firma
+                await this.createOrder(
+                    this.paymentIntentId,
+                    'succeeded',
+                    this.paymentTotal,
+                    this.firmaBase64  // ← Firma capturada
+                );
+
+                // Ir a confirmación (paso 5)
+                this.currentStep = 5;
+                this.render();
+
+            } catch (error) {
+                console.error('Error creando pedido con firma:', error);
+                this.showError('Error al guardar la firma. Por favor intente nuevamente.');
+            }
+        }
+
+        // ==================== FIN MÉTODOS DEL CANVAS DE FIRMA ====================
+
         async processPayment() {
             const btnText = document.getElementById('sacs-btn-text');
             const btnSpinner = document.getElementById('sacs-btn-spinner');
             const payBtn = document.getElementById('sacs-pay-btn');
             const errorContainer = document.getElementById('sacs-error-container');
 
-            // Capturar info del formulario
-            this.customerInfo = {
-                correo: document.getElementById('sacs-correo').value.trim(),
-                nombre: document.getElementById('sacs-nombre').value.trim(),
-                direccion: document.getElementById('sacs-direccion').value.trim(),
-                ciudad: document.getElementById('sacs-ciudad').value.trim(),
-                codigoPostal: document.getElementById('sacs-cp').value.trim()
-            };
-
+            // Validar que la info del cliente ya esté capturada (desde paso 2)
             if (!this.validateCustomerInfo()) {
-                this.showError('Por favor completa todos los campos');
+                this.showError('Error: Información del cliente no encontrada');
                 return;
             }
 
@@ -1433,7 +1964,6 @@
                 const total = this.calculateTotal();
 
                 // 1. Crear Payment Intent
-                // Crear metadata simplificado (Stripe limita a 500 caracteres por valor)
                 const productsSimplified = this.cart.map(item => ({
                     nombre: item.nombre,
                     cantidad: item.quantity,
@@ -1487,11 +2017,19 @@
                 // 3. Guardar order ID
                 this.orderId = paymentIntent.id.substring(3).toUpperCase();
 
-                // 4. Crear pedido en SACS
-                await this.createOrder(paymentIntent.id, 'succeeded', total);
+                // 4. Crear pedido con o sin firma
+                if (this.firmaBase64) {
+                    // CON FIRMA: Ya capturada en paso 3
+                    console.log('✓ Pago exitoso - Crear pedido CON firma');
+                    await this.createOrder(paymentIntent.id, 'succeeded', total, this.firmaBase64);
+                } else {
+                    // SIN FIRMA
+                    console.log('✓ Pago exitoso - Crear pedido SIN firma');
+                    await this.createOrder(paymentIntent.id, 'succeeded', total, null);
+                }
 
-                // 5. Ir a confirmación
-                this.currentStep = 3;
+                // 5. Ir a confirmación (paso 5)
+                this.currentStep = 5;
                 this.render();
 
             } catch (error) {
@@ -1504,7 +2042,7 @@
             }
         }
 
-        async createOrder(paymentIntentId, paymentStatus, total) {
+        async createOrder(paymentIntentId, paymentStatus, total, firmaBase64 = null) {
             const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
@@ -1691,7 +2229,16 @@
                     cobros: cobros
                 };
 
-                console.log('📦 Creando pedido en SACS:', pedidoObject);
+                // 🔥 AGREGAR FIRMA SI EXISTE 🔥
+                if (firmaBase64) {
+                    pedidoObject.firmaBase64 = firmaBase64;
+                    console.log('📦 Creando pedido en SACS CON FIRMA:', {
+                        ...pedidoObject,
+                        firmaBase64: firmaBase64.substring(0, 50) + '...'
+                    });
+                } else {
+                    console.log('📦 Creando pedido en SACS (sin firma):', pedidoObject);
+                }
 
                 const response = await fetch(`${API_URL}/pedidos/createPedido`, {
                     method: 'POST',
