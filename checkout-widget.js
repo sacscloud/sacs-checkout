@@ -11,7 +11,7 @@
     const SACS_API_URL = 'https://api.sacscloud.com/v1';
 
     // Stripe Platform Publishable Key - Direct Charges con Stripe Connect
-    const STRIPE_PUBLISHABLE_KEY = 'pk_test_51SOJtVIDcKiybAAm47MUPAZ2rWptm9y0ffR0cg29PFORoml4pw1zOJjgQ3up5YvqabN0jWDW2ii2s1cNEfiFbhoV00xvSrkbuB';
+    const STRIPE_PUBLISHABLE_KEY = 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5';
 
     class SacsCheckout {
         constructor() {
