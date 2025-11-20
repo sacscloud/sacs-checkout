@@ -15,6 +15,10 @@
 
     class SacsCheckout {
         constructor() {
+            // Generar ID único para esta instancia
+            this.instanceId = 'sacs-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            this.containerId = null; // Se establecerá en init()
+
             this.config = {
                 accountId: null,
                 configId: null,
@@ -58,8 +62,32 @@
             this.paymentTotal = 0;
         }
 
+        findAvailableContainer() {
+            // Buscar contenedores con el ID sacs-checkout-button
+            const containers = document.querySelectorAll('[id="sacs-checkout-button"]');
+
+            if (containers.length === 0) {
+                console.error('❌ No se encontró ningún contenedor con id="sacs-checkout-button"');
+                return 'sacs-checkout-button';
+            }
+
+            // Buscar el primer contenedor que no tenga un botón ya renderizado
+            for (let container of containers) {
+                if (container.children.length === 0) {
+                    return container.id;
+                }
+            }
+
+            // Si todos están ocupados, usar el primero de todos modos
+            return containers[0].id;
+        }
+
         async init(options) {
             console.log('🔧 Init widget con opciones:', options);
+
+            // Establecer containerId (usar el proporcionado o buscar el siguiente disponible)
+            this.containerId = options.containerId || this.findAvailableContainer();
+            console.log('📦 Usando containerId:', this.containerId);
 
             // Guardar accountId y configId
             this.config.accountId = options.accountId;
@@ -319,8 +347,11 @@
         }
 
         renderButton() {
-            const container = document.getElementById('sacs-checkout-button');
-            if (!container) return;
+            const container = document.getElementById(this.containerId);
+            if (!container) {
+                console.warn(`⚠️ Contenedor no encontrado: ${this.containerId}`);
+                return;
+            }
 
             const button = document.createElement('button');
             const styles = this.config.checkoutButtonStyles;
@@ -2313,7 +2344,16 @@
         }
     }
 
-    // Exponer instancia global
-    window.sacsCheckout = new SacsCheckout();
+    // Exponer API global con soporte para múltiples instancias
+    window.sacsCheckout = {
+        instances: [],
+
+        async init(options) {
+            const instance = new SacsCheckout();
+            await instance.init(options);
+            this.instances.push(instance);
+            return instance;
+        }
+    };
 
 })(window);

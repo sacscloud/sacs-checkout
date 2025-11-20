@@ -3,120 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SACS Checkout Widget - Test</title>
+    <title>Test - Múltiples Botones SACS Checkout</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
             padding: 20px;
         }
-
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-            text-align: center;
-        }
-
         h1 {
-            color: #1F2937;
-            margin-bottom: 10px;
-            font-size: 2em;
+            color: #333;
         }
-
-        .subtitle {
-            color: #6B7280;
-            margin-bottom: 30px;
-            font-size: 1.1em;
-        }
-
-        .info-box {
-            background: #F3F4F6;
+        .button-container {
+            margin: 30px 0;
             padding: 20px;
+            border: 2px solid #e0e0e0;
             border-radius: 8px;
-            margin-bottom: 30px;
-            text-align: left;
+            background: #f9f9f9;
         }
-
-        .info-box h2 {
-            color: #374151;
-            font-size: 1.2em;
-            margin-bottom: 10px;
-        }
-
-        .info-box p {
-            color: #6B7280;
-            line-height: 1.6;
-            margin-bottom: 8px;
-        }
-
-        .info-box code {
-            background: #E5E7EB;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            color: #DC2626;
-        }
-
-        #sacs-checkout-button {
-            margin-top: 20px;
-        }
-
-        .footer {
-            margin-top: 30px;
-            color: #9CA3AF;
-            font-size: 0.9em;
-        }
-
-        .badge {
-            display: inline-block;
-            background: #10B981;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-            margin-bottom: 20px;
+        .button-container h2 {
+            margin-top: 0;
+            color: #555;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="badge">Test Environment</div>
-        <h1>SACS Checkout Widget</h1>
-        <p class="subtitle">Sistema Avanzado de Comunicación Social</p>
+    <h1>🧪 Test: Múltiples Botones de Checkout</h1>
+    <p>Esta página prueba 2 botones diferentes con configuraciones independientes.</p>
 
-        <div class="info-box">
-            <h2>Información de Test</h2>
-            <p><strong>Account ID:</strong> <code>pruebaskpop</code></p>
-            <p><strong>CDN:</strong> <code>LOCAL</code></p>
-            <p><strong>Versión:</strong> <code>v1.2.0 (local)</code></p>
-        </div>
+    <!-- BOTÓN 1 -->
+    <div class="button-container">
+        <h2>Botón 1 - Config: btn-1763671179823-qlv6rm86e</h2>
+        <div id="sacs-checkout-button"></div>
+        <script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@latest/checkout-widget.js"></script>
+        <script>
+          sacsCheckout.init({
+            accountId: 'pruebaskpop',
+            configId: 'btn-1763671179823-qlv6rm86e'
+          });
+        </script>
+    </div>
 
-        <!-- SACS Embedded Checkout -->
-        <script src="./checkout-widget.js"></script>
+    <!-- BOTÓN 2 -->
+    <div class="button-container">
+        <h2>Botón 2 - Config: btn-1763670577456-0fonqnhdv</h2>
         <div id="sacs-checkout-button"></div>
         <script>
-          sacsCheckout.init({ accountId: 'pruebaskpop' });
+          sacsCheckout.init({
+            accountId: 'pruebaskpop',
+            configId: 'btn-1763670577456-0fonqnhdv'
+          });
         </script>
-
-        <div class="footer">
-            Página de prueba para el widget de checkout de SACS
-        </div>
     </div>
+
+    <hr style="margin: 40px 0;">
+    <p style="color: #666; font-size: 14px;">
+        <strong>Nota:</strong> Ambos divs usan el mismo ID "sacs-checkout-button".
+        El widget automáticamente encuentra contenedores vacíos para renderizar cada botón.
+    </p>
 </body>
 </html>
