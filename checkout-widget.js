@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.5.0 - Separar paso de información y pago, agregar firma digital
+ * Versión: 1.6.0 - Múltiples instancias + configuraciones independientes
  */
 
 (function(window) {
@@ -418,10 +418,16 @@
         }
 
         injectStyles() {
-            if (document.getElementById('sacs-checkout-styles')) return;
+            // Buscar o crear el elemento de estilos
+            let style = document.getElementById('sacs-checkout-styles');
 
-            const style = document.createElement('style');
-            style.id = 'sacs-checkout-styles';
+            if (!style) {
+                style = document.createElement('style');
+                style.id = 'sacs-checkout-styles';
+                document.head.appendChild(style);
+            }
+
+            // Actualizar los estilos (se actualizan en cada instancia)
             style.textContent = `
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -1169,7 +1175,6 @@
 
                 /* ==================== FIN ESTILOS PARA FIRMA DIGITAL ==================== */
             `;
-            document.head.appendChild(style);
         }
 
         open() {
