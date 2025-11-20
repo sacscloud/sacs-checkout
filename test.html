@@ -26,6 +26,8 @@
             color: #555;
         }
     </style>
+    <!-- Cargar widget una sola vez -->
+    <script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@master/checkout-widget.js"></script>
 </head>
 <body>
     <h1>🧪 Test: Múltiples Botones de Checkout</h1>
@@ -35,7 +37,6 @@
     <div class="button-container">
         <h2>Botón 1 - Config: btn-1763671179823-qlv6rm86e</h2>
         <div id="sacs-checkout-button"></div>
-        <script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@latest/checkout-widget.js"></script>
         <script>
           sacsCheckout.init({
             accountId: 'pruebaskpop',
