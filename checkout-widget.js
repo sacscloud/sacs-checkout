@@ -17,6 +17,7 @@
         constructor() {
             this.config = {
                 accountId: null,
+                configId: null,
                 products: [],
                 drawerStyles: {
                     backgroundColor: '#FFFFFF',
@@ -60,8 +61,9 @@
         async init(options) {
             console.log('🔧 Init widget con opciones:', options);
 
-            // Guardar accountId
+            // Guardar accountId y configId
             this.config.accountId = options.accountId;
+            this.config.configId = options.configId || null;
 
             // PASO 1: Cargar configuraciones desde MongoDB (si hay accountId)
             if (options.accountId) {
@@ -72,7 +74,7 @@
                 await this.loadAccountDefaults(options.accountId);
 
                 console.log('📡 Cargando eCommerce config (productos, colores, etc.)...');
-                await this.loadEcommerceConfig(options.accountId);
+                await this.loadEcommerceConfig(options.accountId, options.configId);
 
                 console.log('📡 Cargando Plantilla de Contratos...');
                 await this.loadPlantillaContratos(options.accountId);
@@ -119,16 +121,23 @@
             this.renderButton();
         }
 
-        async loadEcommerceConfig(accountId) {
+        async loadEcommerceConfig(accountId, configId = null) {
             const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
+                // Construir el filtro: si hay configId, filtrar por id, sino solo por account
+                const matchFilter = configId
+                    ? { account: accountId, id: configId }
+                    : { account: accountId };
+
+                console.log('🔍 Buscando ecommerce config con filtro:', matchFilter);
+
                 const response = await fetch(`${API_URL}/rest/${accountId}/ecommerceconfig/aggregate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         pipeline: [
-                            { $match: { account: accountId } },
+                            { $match: matchFilter },
                             { $limit: 1 }
                         ]
                     })
