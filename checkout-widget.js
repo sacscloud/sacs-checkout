@@ -7,11 +7,24 @@
 (function(window) {
     'use strict';
 
-    // Configuración
+    // ====== CONFIGURACIÓN ======
     const SACS_API_URL = 'https://api.sacscloud.com/v1';
 
-    // Stripe Platform Publishable Key - Direct Charges con Stripe Connect
-    const STRIPE_PUBLISHABLE_KEY = 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5';
+    // ====== STRIPE - MODO DEV/PROD ======
+    // 👉 Cambiar a true para desarrollo, false para producción
+    const STRIPE_DEV_MODE = false;
+
+    // Stripe Platform Publishable Keys - Direct Charges con Stripe Connect
+    const STRIPE_KEYS = {
+        development: 'pk_test_51SOJtVIDcKiybAAm47MUPAZ2rWptm9y0ffR0cg29PFORoml4pw1zOJjgQ3up5YvqabN0jWDW2ii2s1cNEfiFbhoV00xvSrkbuB',
+        production: 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5'
+    };
+
+    const STRIPE_PUBLISHABLE_KEY = STRIPE_DEV_MODE ? STRIPE_KEYS.development : STRIPE_KEYS.production;
+
+    // Log del modo activo
+    console.log(`[SACS Checkout] Stripe Mode: ${STRIPE_DEV_MODE ? 'DEVELOPMENT' : 'PRODUCTION'}`);
+    console.log(`[SACS Checkout] Using key: ${STRIPE_PUBLISHABLE_KEY.substring(0, 20)}...`);
 
     class SacsCheckout {
         constructor() {
