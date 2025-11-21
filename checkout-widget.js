@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.6.0 - Múltiples instancias + configuraciones independientes
+ * Versión: 1.7.0 - Múltiples instancias + configuraciones independientes
  */
 
 (function(window) {
@@ -1268,7 +1268,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.6.0</span></h1>
+                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.7.0</span></h1>
                     ${this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1484,14 +1484,14 @@
                     </div>
 
                     <div class="sacs-firma-actions">
-                        <button class="sacs-btn sacs-btn-secondary" onclick="sacsCheckout.limpiarFirma()">
+                        <button id="sacs-limpiar-firma-btn" class="sacs-btn sacs-btn-secondary">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="1 4 1 10 7 10"></polyline>
                                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                             </svg>
                             Limpiar
                         </button>
-                        <button id="sacs-confirmar-firma-btn" class="sacs-btn sacs-btn-primary" onclick="sacsCheckout.confirmarFirma()" disabled>
+                        <button id="sacs-confirmar-firma-btn" class="sacs-btn sacs-btn-primary" disabled>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
@@ -1707,7 +1707,7 @@
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23016FD0' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='20' font-family='Arial' font-size='10' font-weight='bold' fill='white' text-anchor='middle'%3EAMEX%3C/text%3E%3C/svg%3E" alt="American Express">
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23003087' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='14' font-family='Arial' font-size='8' font-weight='bold' fill='%23009CDE' text-anchor='middle'%3EPayPal%3C/text%3E%3C/svg%3E" alt="PayPal">
                         </div>
-                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote! • v1.6.0</p>
+                        <p class="sacs-secure-text">Pago seguro • ¡Consíguelo antes de que se agote!</p>
                     ` : ''}
                 </div>
             `;
@@ -1853,6 +1853,18 @@
             canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
             canvas.addEventListener('touchend', () => this.stopDrawing());
             canvas.addEventListener('touchcancel', () => this.stopDrawing());
+
+            // Event listeners para botones de firma
+            const btnLimpiar = document.getElementById('sacs-limpiar-firma-btn');
+            const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
+
+            if (btnLimpiar) {
+                btnLimpiar.addEventListener('click', () => this.limpiarFirma());
+            }
+
+            if (btnConfirmar) {
+                btnConfirmar.addEventListener('click', () => this.confirmarFirma());
+            }
 
             console.log('✓ Canvas de firma inicializado');
         }
