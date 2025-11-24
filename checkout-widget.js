@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.8.2 - Leer stripeAccountIdTest/Live según modo
+ * Versión: 1.8.3 - Fix folio: leer result.data.folio + formato PED-#
  */
 
 (function(window) {
@@ -1277,7 +1277,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.8.2</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.8.3</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2459,9 +2459,11 @@
                 if (result.success) {
                     console.log('✓ Pedido creado exitosamente:', result);
                     // Actualizar el orderId con el folio real del pedido
-                    if (result.folio) {
-                        this.orderId = result.folio.toString();
-                        return { success: true, folio: result.folio };
+                    // El folio viene en result.data.folio (estructura del API)
+                    const folio = result.data?.folio || result.folio;
+                    if (folio) {
+                        this.orderId = `PED-${folio}`;
+                        return { success: true, folio: folio };
                     }
                 } else {
                     console.error('Error al crear pedido:', result.message || result.msg);
