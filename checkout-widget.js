@@ -2325,7 +2325,7 @@
                 const details = this.cart.map(item => {
                     const cantidad = Number(item.quantity);
                     const precioUnitario = Number(item.precio);
-                    const costoUnitario = Number(item.costo);
+                    const costoUnitario = Number(item.costo) || 0; // Usar 0 si no viene costo
                     const valorImpuesto = Number(item.valorimpuesto) / 100; // Convertir porcentaje a decimal
 
                     // Cálculos financieros (igual que fashion-forward)
