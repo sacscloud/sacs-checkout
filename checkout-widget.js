@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.7.1 - Fix: Manejo de errores en creación de pedidos
+ * Versión: 1.8.0 - Soporte modo Test/Producción de Stripe por cuenta
  */
 
 (function(window) {
@@ -10,21 +10,13 @@
     // ====== CONFIGURACIÓN ======
     const SACS_API_URL = 'https://api.sacscloud.com/v1';
 
-    // ====== STRIPE - MODO DEV/PROD ======
-    // 👉 Cambiar a true para desarrollo, false para producción
-    const STRIPE_DEV_MODE = false;
-
+    // ====== STRIPE - LLAVES ======
     // Stripe Platform Publishable Keys - Direct Charges con Stripe Connect
+    // El modo (test/producción) se lee de la configuración de la cuenta en MongoDB
     const STRIPE_KEYS = {
-        development: 'pk_test_51SOJtVIDcKiybAAm47MUPAZ2rWptm9y0ffR0cg29PFORoml4pw1zOJjgQ3up5YvqabN0jWDW2ii2s1cNEfiFbhoV00xvSrkbuB',
-        production: 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5'
+        test: 'pk_test_51SOJtVIDcKiybAAm47MUPAZ2rWptm9y0ffR0cg29PFORoml4pw1zOJjgQ3up5YvqabN0jWDW2ii2s1cNEfiFbhoV00xvSrkbuB',
+        live: 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5'
     };
-
-    const STRIPE_PUBLISHABLE_KEY = STRIPE_DEV_MODE ? STRIPE_KEYS.development : STRIPE_KEYS.production;
-
-    // Log del modo activo
-    console.log(`[SACS Checkout] Stripe Mode: ${STRIPE_DEV_MODE ? 'DEVELOPMENT' : 'PRODUCTION'}`);
-    console.log(`[SACS Checkout] Using key: ${STRIPE_PUBLISHABLE_KEY.substring(0, 20)}...`);
 
     class SacsCheckout {
         constructor() {
@@ -239,7 +231,9 @@
                 if (result.success && Array.isArray(result.data) && result.data.length > 0) {
                     const stripeConfig = result.data[0];
                     this.config.stripeAccountId = stripeConfig.stripeAccountId;
+                    this.config.stripeTestMode = stripeConfig.stripeTestMode || false;
                     console.log('✓ Stripe Account ID:', this.config.stripeAccountId);
+                    console.log('✓ Stripe Test Mode:', this.config.stripeTestMode);
                 } else {
                     console.error('No se encontró configuración de Stripe para esta cuenta');
                 }
@@ -423,8 +417,16 @@
                 });
             }
 
+            // Determinar la llave a usar basándose en la configuración de la cuenta
+            const stripePublishableKey = this.config.stripeTestMode
+                ? STRIPE_KEYS.test
+                : STRIPE_KEYS.live;
+
+            console.log(`[SACS Checkout] Stripe Mode: ${this.config.stripeTestMode ? 'TEST' : 'LIVE'}`);
+            console.log(`[SACS Checkout] Using key: ${stripePublishableKey.substring(0, 20)}...`);
+
             // Inicializar Stripe con el stripeAccountId del tenant (Direct Charge)
-            this.stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY, {
+            this.stripe = window.Stripe(stripePublishableKey, {
                 stripeAccount: this.config.stripeAccountId
             });
 
@@ -1269,7 +1271,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.7.1</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.8.0</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
