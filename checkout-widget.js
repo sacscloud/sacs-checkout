@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.8.3 - Fix folio: leer result.data.folio + formato PED-#
+ * Versión: 1.8.4 - Agregar métodos proxy al API global (close, goToStep, etc)
  */
 
 (function(window) {
@@ -1277,7 +1277,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.8.3</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.8.4</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2507,6 +2507,31 @@
             await instance.init(options);
             this.instances.push(instance);
             return instance;
+        },
+
+        // Métodos proxy que delegan a la última instancia activa
+        _getInstance() {
+            return this.instances[this.instances.length - 1];
+        },
+
+        close() {
+            const instance = this._getInstance();
+            if (instance) instance.close();
+        },
+
+        updateQuantity(index, quantity) {
+            const instance = this._getInstance();
+            if (instance) instance.updateQuantity(index, quantity);
+        },
+
+        goToStep(step) {
+            const instance = this._getInstance();
+            if (instance) instance.goToStep(step);
+        },
+
+        volverDesdePago() {
+            const instance = this._getInstance();
+            if (instance) instance.volverDesdePago();
         }
     };
 
