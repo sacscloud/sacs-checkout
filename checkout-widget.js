@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.7.0 - Múltiples instancias + configuraciones independientes
+ * Versión: 1.7.1 - Fix: Manejo de errores en creación de pedidos
  */
 
 (function(window) {
@@ -64,6 +64,7 @@
                 codigoPostal: ''
             };
             this.orderId = null;
+            this.paymentError = null; // Para almacenar errores cuando el pago es exitoso pero falla el pedido
 
             // Variables para manejo de firma
             this.isDrawing = false;
@@ -1268,8 +1269,8 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">Carrito de Compras <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.7.0</span></h1>
-                    ${this.renderStepper()}
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.7.1</span></h1>
+                    ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
                 ${this.renderFooter()}
@@ -1343,6 +1344,9 @@
                 case 5:
                     // Paso 5 es confirmación
                     return this.renderSuccess();
+                case 99:
+                    // Caso especial: Error en creación de pedido pero pago exitoso
+                    return this.renderPaymentError();
                 default:
                     return this.renderCart();
             }
@@ -1558,6 +1562,71 @@
             `;
         }
 
+        renderPaymentError() {
+            const total = this.calculateTotal();
+            const errorInfo = this.paymentError || {};
+            const transactionId = errorInfo.paymentIntentId || 'No disponible';
+            const errorMessage = errorInfo.message || 'Error desconocido';
+            const errorDetails = errorInfo.details || '';
+
+            return `
+                <div class="sacs-drawer-body">
+                    <div class="sacs-success-container">
+                        <div class="sacs-success-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                            <svg class="sacs-success-check" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                                <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <h2 class="sacs-success-title" style="color: #d97706;">Acción Requerida</h2>
+                        <p class="sacs-success-subtitle">Tu pago fue procesado exitosamente, pero hubo un problema al crear el pedido</p>
+
+                        <div class="sacs-order-box" style="border-color: #f59e0b; background: #fffbeb;">
+                            <p class="sacs-order-label" style="color: #92400e;">ID DE TRANSACCIÓN</p>
+                            <h3 class="sacs-order-number" style="color: #b45309; font-size: 16px; word-break: break-all;">${transactionId}</h3>
+                            <p class="sacs-order-total" style="color: #92400e;">Total cobrado: $${total.toFixed(2)}</p>
+                        </div>
+
+                        <div style="margin-top: 24px; padding: 20px; background: #fef3c7; border-radius: 12px; border: 1px solid #fbbf24;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #92400e;">
+                                <svg style="width: 20px; height: 20px; display: inline-block; vertical-align: middle; margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                                Razón del error:
+                            </h4>
+                            <p style="margin: 0; font-size: 14px; color: #78350f; line-height: 1.5;">
+                                ${errorMessage}
+                            </p>
+                            ${errorDetails ? `<p style="margin: 8px 0 0 0; font-size: 12px; color: #92400e; opacity: 0.8; font-family: monospace; word-break: break-all;">${errorDetails}</p>` : ''}
+                        </div>
+
+                        <div style="margin-top: 24px;">
+                            <div class="sacs-info-box" style="background: #f0fdf4; border-color: #86efac;">
+                                <svg class="sacs-info-icon" style="color: #16a34a;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <div class="sacs-info-content">
+                                    <h4 class="sacs-info-title" style="color: #15803d;">Tu pago fue exitoso</h4>
+                                    <p class="sacs-info-text" style="color: #166534;">El cargo de $${total.toFixed(2)} se procesó correctamente en tu tarjeta</p>
+                                </div>
+                            </div>
+                            <div class="sacs-info-box" style="background: #fffbeb; border-color: #fbbf24;">
+                                <svg class="sacs-info-icon" style="color: #d97706;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    <polyline points="22,6 12,13 2,6"></polyline>
+                                </svg>
+                                <div class="sacs-info-content">
+                                    <h4 class="sacs-info-title" style="color: #92400e;">Toma una captura de pantalla</h4>
+                                    <p class="sacs-info-text" style="color: #78350f;">Guarda el ID de transacción y contacta con nosotros para completar tu pedido manualmente</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         async generateCodes(orderNumber, total) {
             // Cargar librerías desde CDN si no están cargadas
             await this.loadQRLibrary();
@@ -1666,6 +1735,17 @@
                     <div class="sacs-drawer-footer">
                         <button class="sacs-btn sacs-btn-primary" onclick="sacsCheckout.close()">
                             Continuar Comprando
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Paso 99: Error de pedido (pago exitoso) - Solo botón para cerrar
+            if (this.currentStep === 99) {
+                return `
+                    <div class="sacs-drawer-footer">
+                        <button class="sacs-btn sacs-btn-primary" style="background: #d97706;" onclick="sacsCheckout.close()">
+                            Cerrar
                         </button>
                     </div>
                 `;
@@ -2022,9 +2102,16 @@
                 this.currentStep = 5;
                 this.render();
 
-            } catch (error) {
-                console.error('Error creando pedido con firma:', error);
-                this.showError('Error al guardar la firma. Por favor intente nuevamente.');
+            } catch (orderError) {
+                // El pago fue exitoso pero falló la creación del pedido
+                console.error('❌ Pago exitoso pero error al crear pedido con firma:', orderError);
+
+                // Guardar error para mostrarlo
+                this.paymentError = orderError;
+
+                // Ir a pantalla de error especial (paso 99)
+                this.currentStep = 99;
+                this.render();
             }
         }
 
@@ -2102,23 +2189,42 @@
                     throw new Error(error.message);
                 }
 
-                // 3. Guardar order ID
+                // 3. Guardar order ID temporal y total
                 this.orderId = paymentIntent.id.substring(3).toUpperCase();
+                this.paymentTotal = total;
 
                 // 4. Crear pedido con o sin firma
-                if (this.firmaBase64) {
-                    // CON FIRMA: Ya capturada en paso 3
-                    console.log('✓ Pago exitoso - Crear pedido CON firma');
-                    await this.createOrder(paymentIntent.id, 'succeeded', total, this.firmaBase64);
-                } else {
-                    // SIN FIRMA
-                    console.log('✓ Pago exitoso - Crear pedido SIN firma');
-                    await this.createOrder(paymentIntent.id, 'succeeded', total, null);
-                }
+                try {
+                    if (this.firmaBase64) {
+                        // CON FIRMA: Ya capturada en paso 3
+                        console.log('✓ Pago exitoso - Crear pedido CON firma');
+                        await this.createOrder(paymentIntent.id, 'succeeded', total, this.firmaBase64);
+                    } else {
+                        // SIN FIRMA
+                        console.log('✓ Pago exitoso - Crear pedido SIN firma');
+                        await this.createOrder(paymentIntent.id, 'succeeded', total, null);
+                    }
 
-                // 5. Ir a confirmación (paso 5)
-                this.currentStep = 5;
-                this.render();
+                    // 5. Si todo salió bien, ir a confirmación (paso 5)
+                    this.currentStep = 5;
+                    this.render();
+
+                } catch (orderError) {
+                    // El pago fue exitoso pero falló la creación del pedido
+                    console.error('❌ Pago exitoso pero error al crear pedido:', orderError);
+
+                    // Guardar error para mostrarlo
+                    this.paymentError = orderError;
+
+                    // Ir a pantalla de error especial (paso 99)
+                    this.currentStep = 99;
+                    this.render();
+
+                    // Re-habilitar botón por si el usuario quiere cerrar
+                    payBtn.disabled = false;
+                    btnText.style.display = 'block';
+                    btnSpinner.style.display = 'none';
+                }
 
             } catch (error) {
                 console.error('Error en el pago:', error);
@@ -2343,18 +2449,26 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    console.log('✓ Pedido creado exitosamente:', result.data);
+                    console.log('✓ Pedido creado exitosamente:', result);
                     // Actualizar el orderId con el folio real del pedido
-                    if (result.data && result.data.folio) {
-                        this.orderId = result.data.folio.toString();
+                    if (result.folio) {
+                        this.orderId = result.folio.toString();
+                        return { success: true, folio: result.folio };
                     }
                 } else {
-                    console.error('Error al crear pedido:', result.message);
+                    console.error('Error al crear pedido:', result.message || result.msg);
+                    // Retornar el error para que el flujo superior lo maneje
+                    throw new Error(result.message || result.msg || 'Error desconocido al crear el pedido');
                 }
 
             } catch (error) {
                 console.error('Error creando pedido:', error);
-                // No interrumpir el flujo aunque falle la creación del pedido
+                // Retornar el error con el paymentIntentId para rastreo
+                throw {
+                    message: error.message || 'Error al comunicarse con el servidor',
+                    paymentIntentId: paymentIntentId,
+                    details: error.toString()
+                };
             }
         }
 
