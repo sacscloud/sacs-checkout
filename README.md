@@ -45,15 +45,87 @@ Widget de checkout embebido para SACS (Sistema Avanzado de Comunicación Social)
 
 ```javascript
 // Cargar configuración desde MongoDB
-await SacsCheckout.init({
+await sacsCheckout.init({
   accountId: 'TU_ACCOUNT_ID'
 });
 ```
 
+### Usar Botón Nativo del CMS (Shopify, Wix, Squarespace, etc.)
+
+Si prefieres usar el botón nativo de tu CMS en lugar del botón generado por SACS:
+
+```html
+<!-- Tu botón nativo del CMS -->
+<button id="mi-boton-comprar" class="tu-clase-css">Comprar Ahora</button>
+
+<script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@master/checkout-widget.js"></script>
+<script>
+  // Inicializar SIN crear botón (renderButton: false)
+  var miCheckout;
+
+  sacsCheckout.init({
+    accountId: 'TU_ACCOUNT_ID',
+    configId: 'TU_CONFIG_ID',
+    renderButton: false  // ← No crea botón, usamos el del CMS
+  }).then(function(instance) {
+    miCheckout = instance;
+  });
+
+  // Conectar tu botón del CMS al checkout
+  document.getElementById('mi-boton-comprar').onclick = function() {
+    miCheckout.open();
+  };
+</script>
+```
+
+**Alternativa más simple** usando el método global:
+
+```html
+<button onclick="sacsCheckout.open('mi-checkout')">Comprar</button>
+
+<script>
+  sacsCheckout.init({
+    accountId: 'TU_ACCOUNT_ID',
+    configId: 'mi-checkout',  // ← Este ID se usa para open()
+    renderButton: false
+  });
+</script>
+```
+
+### Múltiples Botones en la Misma Página
+
+Para tener varios botones de checkout en diferentes lugares de tu sitio:
+
+```html
+<!-- Botón 1: Producto A -->
+<div id="checkout-producto-a"></div>
+
+<!-- Botón 2: Producto B (en otra sección) -->
+<div id="checkout-producto-b"></div>
+
+<script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@master/checkout-widget.js"></script>
+<script>
+  // IMPORTANTE: Usar IDs únicos con containerId
+  sacsCheckout.init({
+    accountId: 'TU_ACCOUNT_ID',
+    configId: 'config-producto-a',
+    containerId: 'checkout-producto-a'  // ← ID único
+  });
+
+  sacsCheckout.init({
+    accountId: 'TU_ACCOUNT_ID',
+    configId: 'config-producto-b',
+    containerId: 'checkout-producto-b'  // ← ID único diferente
+  });
+</script>
+```
+
+> ⚠️ **Importante**: NO uses el mismo ID (`sacs-checkout-button`) para múltiples contenedores. Siempre usa `containerId` con valores únicos.
+
 ### Inicialización con Productos Personalizados
 
 ```javascript
-await SacsCheckout.init({
+await sacsCheckout.init({
   accountId: 'TU_ACCOUNT_ID',
   products: [
     {
@@ -79,7 +151,7 @@ await SacsCheckout.init({
 ### Personalización de Colores
 
 ```javascript
-await SacsCheckout.init({
+await sacsCheckout.init({
   accountId: 'TU_ACCOUNT_ID',
   primaryColor: '#1F2937',   // Color principal del widget
   textColor: '#FFFFFF',      // Color del texto en botones
@@ -94,10 +166,23 @@ await SacsCheckout.init({
 | Parámetro | Tipo | Requerido | Descripción |
 |-----------|------|-----------|-------------|
 | `accountId` | string | ✅ | ID de tu cuenta SACS |
+| `configId` | string | ❌ | ID de la configuración de ecommerce (creada en SACS) |
+| `containerId` | string | ❌ | ID único del contenedor HTML (para múltiples botones) |
+| `renderButton` | boolean | ❌ | Si es `false`, no crea botón (default: `true`) |
 | `products` | array | ❌ | Array de productos (se carga desde MongoDB si no se especifica) |
 | `primaryColor` | string | ❌ | Color principal (por defecto: `#1F2937`) |
 | `textColor` | string | ❌ | Color del texto (por defecto: `#FFFFFF`) |
 | `accentColor` | string | ❌ | Color de acentos (por defecto: `#000000`) |
+
+### Métodos Disponibles
+
+| Método | Descripción |
+|--------|-------------|
+| `sacsCheckout.init(options)` | Inicializa una instancia y retorna una Promise |
+| `sacsCheckout.open(id)` | Abre el drawer de una instancia por su `containerId` o `configId` |
+| `sacsCheckout.getInstance(id)` | Obtiene una instancia por su ID |
+| `sacsCheckout.listInstances()` | Lista todos los IDs de instancias activas |
+| `instancia.open()` | Abre el drawer de una instancia específica |
 
 ### Estructura de Producto
 
@@ -161,7 +246,11 @@ sacs-cdn/
 
 ### Versión
 
-**v1.0.0** - Widget de checkout embebido
+**v1.9.0** - Soporte para botones nativos de CMS + múltiples instancias mejoradas
+- Nueva opción `renderButton: false` para usar botones del CMS
+- Nuevo método `sacsCheckout.open(id)` para abrir drawer desde cualquier lugar
+- Soporte mejorado para múltiples instancias con `containerId`
+- Documentación de API completa
 
 ## 📝 Flujo de Checkout
 

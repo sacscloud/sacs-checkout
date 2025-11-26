@@ -1,7 +1,15 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.7.0 - Múltiples instancias + configuraciones independientes
+ * Versión: 1.9.0 - Soporte para botones nativos de CMS + múltiples instancias mejoradas
+ *
+ * Nuevas opciones:
+ * - renderButton: false → No crea botón, permite usar botón nativo del CMS
+ * - containerId: 'mi-id' → ID único para múltiples botones en la misma página
+ *
+ * Ejemplo con botón nativo del CMS:
+ *   var checkout = await sacsCheckout.init({ accountId: 'xxx', renderButton: false });
+ *   document.getElementById('mi-boton').onclick = () => checkout.open();
  */
 
 (function(window) {
@@ -158,8 +166,13 @@
             // Inyectar estilos (después de tener todos los colores)
             this.injectStyles();
 
-            // Renderizar botón (después de tener todos los colores)
-            this.renderButton();
+            // Renderizar botón solo si renderButton !== false
+            // Si es false, el usuario usará su propio botón del CMS y llamará a open() manualmente
+            if (options.renderButton !== false) {
+                this.renderButton();
+            } else {
+                console.log('ℹ️ renderButton: false - No se crea botón. Usar instancia.open() para abrir el drawer.');
+            }
         }
 
         async loadEcommerceConfig(accountId, configId = null) {
@@ -2376,13 +2389,83 @@
 
     // Exponer API global con soporte para múltiples instancias
     window.sacsCheckout = {
-        instances: [],
+        instances: {},  // Cambiado a objeto para acceso por ID
 
+        /**
+         * Inicializa una nueva instancia del checkout
+         * @param {Object} options - Opciones de configuración
+         * @param {string} options.accountId - ID de la cuenta SACS (requerido)
+         * @param {string} options.configId - ID de la configuración de ecommerce
+         * @param {string} options.containerId - ID único del contenedor (para múltiples botones)
+         * @param {boolean} options.renderButton - Si es false, no crea botón (default: true)
+         * @returns {SacsCheckout} Instancia del checkout con método open()
+         *
+         * @example
+         * // Uso básico (crea botón automáticamente)
+         * sacsCheckout.init({ accountId: 'xxx', configId: 'yyy' });
+         *
+         * @example
+         * // Sin botón - usar botón nativo del CMS
+         * var checkout = await sacsCheckout.init({
+         *   accountId: 'xxx',
+         *   configId: 'yyy',
+         *   renderButton: false
+         * });
+         * document.getElementById('mi-boton-cms').onclick = () => checkout.open();
+         *
+         * @example
+         * // Múltiples botones en la misma página
+         * sacsCheckout.init({ accountId: 'xxx', configId: 'config1', containerId: 'checkout-1' });
+         * sacsCheckout.init({ accountId: 'xxx', configId: 'config2', containerId: 'checkout-2' });
+         */
         async init(options) {
             const instance = new SacsCheckout();
             await instance.init(options);
-            this.instances.push(instance);
+
+            // Guardar instancia por containerId o configId para acceso posterior
+            const key = options.containerId || options.configId || instance.instanceId;
+            this.instances[key] = instance;
+
+            console.log(`✅ Instancia creada: ${key}`);
             return instance;
+        },
+
+        /**
+         * Obtiene una instancia existente por su containerId o configId
+         * @param {string} id - containerId o configId de la instancia
+         * @returns {SacsCheckout|null} La instancia o null si no existe
+         *
+         * @example
+         * var checkout = sacsCheckout.getInstance('checkout-1');
+         * checkout.open();
+         */
+        getInstance(id) {
+            return this.instances[id] || null;
+        },
+
+        /**
+         * Abre el drawer de una instancia específica
+         * @param {string} id - containerId o configId de la instancia
+         *
+         * @example
+         * // Desde un botón del CMS
+         * <button onclick="sacsCheckout.open('mi-checkout')">Comprar</button>
+         */
+        open(id) {
+            const instance = this.getInstance(id);
+            if (instance) {
+                instance.open();
+            } else {
+                console.error(`❌ No se encontró instancia con ID: ${id}`);
+            }
+        },
+
+        /**
+         * Lista todas las instancias activas
+         * @returns {string[]} Array de IDs de instancias
+         */
+        listInstances() {
+            return Object.keys(this.instances);
         }
     };
 
