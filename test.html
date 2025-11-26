@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test - Múltiples Botones SACS Checkout</title>
+    <title>Test - Múltiples Botones SACS Checkout v1.9.0</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -26,41 +26,44 @@
             color: #555;
         }
     </style>
-    <!-- Cargar widget una sola vez -->
-    <script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@master/checkout-widget.js"></script>
 </head>
 <body>
-    <h1>🧪 Test: Múltiples Botones de Checkout</h1>
-    <p>Esta página prueba 2 botones diferentes con configuraciones independientes.</p>
+    <h1>Test: Múltiples Botones de Checkout v1.9.0</h1>
+    <p>Esta página prueba 2 botones diferentes con IDs únicos (containerId).</p>
+
+    <!-- Cargar widget UNA sola vez -->
+    <script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@master/checkout-widget.js"></script>
 
     <!-- BOTÓN 1 -->
     <div class="button-container">
-        <h2>Botón 1 - Config: btn-1763671179823-qlv6rm86e</h2>
-        <div id="sacs-checkout-button"></div>
-        <script>
-          sacsCheckout.init({
-            accountId: 'pruebaskpop',
-            configId: 'btn-1763671179823-qlv6rm86e'
-          });
-        </script>
+        <h2>Botón 1</h2>
+        <div id="btn-1763670577456-0fonqnhdv"></div>
     </div>
 
     <!-- BOTÓN 2 -->
     <div class="button-container">
-        <h2>Botón 2 - Config: btn-1763670577456-0fonqnhdv</h2>
-        <div id="sacs-checkout-button"></div>
-        <script>
-          sacsCheckout.init({
-            accountId: 'pruebaskpop',
-            configId: 'btn-1763670577456-0fonqnhdv'
-          });
-        </script>
+        <h2>Botón 2</h2>
+        <div id="btn-1763671179823-qlv6rm86e"></div>
     </div>
+
+    <script>
+      // Inicializar ambos botones con IDs únicos
+      sacsCheckout.init({
+        accountId: 'pruebaskpop',
+        configId: 'btn-1763670577456-0fonqnhdv',
+        containerId: 'btn-1763670577456-0fonqnhdv'
+      });
+
+      sacsCheckout.init({
+        accountId: 'pruebaskpop',
+        configId: 'btn-1763671179823-qlv6rm86e',
+        containerId: 'btn-1763671179823-qlv6rm86e'
+      });
+    </script>
 
     <hr style="margin: 40px 0;">
     <p style="color: #666; font-size: 14px;">
-        <strong>Nota:</strong> Ambos divs usan el mismo ID "sacs-checkout-button".
-        El widget automáticamente encuentra contenedores vacíos para renderizar cada botón.
+        <strong>Nota:</strong> Cada div tiene un ID único y se usa containerId para evitar conflictos.
     </p>
 </body>
 </html>
