@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.0 - Soporte para botones nativos de CMS + múltiples instancias mejoradas
+ * Versión: 1.9.1 - Soporte para botones nativos de CMS + múltiples instancias mejoradas
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -72,6 +72,7 @@
             this.lastY = 0;
             this.firmaDibujada = false;
             this.firmaBase64 = null;
+            this.termsAccepted = false; // Checkbox de términos aceptados
             this.paymentIntentId = null;
             this.paymentTotal = 0;
         }
@@ -1208,6 +1209,343 @@
                     cursor: not-allowed;
                 }
 
+                /* ==================== ESTILOS PARA TÉRMINOS Y PREVIEW ==================== */
+
+                .sacs-terms-container {
+                    margin: 20px 0;
+                    padding: 16px;
+                    background: #f8fafc;
+                    border-radius: 12px;
+                    border: 1px solid #e2e8f0;
+                }
+
+                .sacs-terms-checkbox {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 12px;
+                    cursor: pointer;
+                }
+
+                .sacs-terms-checkbox input[type="checkbox"] {
+                    width: 20px;
+                    height: 20px;
+                    margin-top: 2px;
+                    cursor: pointer;
+                    accent-color: #6366f1;
+                }
+
+                .sacs-terms-checkbox label {
+                    font-size: 14px;
+                    color: #374151;
+                    line-height: 1.5;
+                    cursor: pointer;
+                }
+
+                .sacs-preview-link {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-top: 12px;
+                    padding: 8px 16px;
+                    background: transparent;
+                    border: 1px solid #6366f1;
+                    border-radius: 8px;
+                    color: #6366f1;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .sacs-preview-link:hover {
+                    background: #6366f1;
+                    color: white;
+                }
+
+                .sacs-preview-link svg {
+                    width: 18px;
+                    height: 18px;
+                }
+
+                /* Modal de Preview del Documento */
+                .sacs-preview-overlay {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.7);
+                    z-index: 10001;
+                    justify-content: center;
+                    align-items: center;
+                    padding: 20px;
+                    box-sizing: border-box;
+                }
+
+                .sacs-preview-overlay.active {
+                    display: flex;
+                }
+
+                .sacs-preview-modal {
+                    background: white;
+                    border-radius: 16px;
+                    width: 100%;
+                    max-width: 800px;
+                    max-height: 90vh;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                }
+
+                .sacs-preview-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 20px 24px;
+                    border-bottom: 1px solid #e5e7eb;
+                    background: #f9fafb;
+                }
+
+                .sacs-preview-header h2 {
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #1f2937;
+                }
+
+                .sacs-preview-close-btn {
+                    background: none;
+                    border: none;
+                    padding: 8px;
+                    cursor: pointer;
+                    border-radius: 8px;
+                    transition: background 0.2s;
+                }
+
+                .sacs-preview-close-btn:hover {
+                    background: #e5e7eb;
+                }
+
+                .sacs-preview-close-btn svg {
+                    width: 24px;
+                    height: 24px;
+                    stroke: #6b7280;
+                }
+
+                .sacs-preview-document {
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 32px;
+                    font-family: 'Georgia', serif;
+                    line-height: 1.8;
+                    color: #1f2937;
+                }
+
+                .sacs-preview-document .doc-header {
+                    text-align: center;
+                    margin-bottom: 32px;
+                    padding-bottom: 24px;
+                    border-bottom: 2px solid #e5e7eb;
+                }
+
+                .sacs-preview-document .doc-logo img {
+                    max-height: 80px;
+                    margin-bottom: 16px;
+                }
+
+                .sacs-preview-document .doc-company-name {
+                    font-size: 24px;
+                    font-weight: 700;
+                    margin: 0 0 8px 0;
+                    color: #111827;
+                }
+
+                .sacs-preview-document .doc-empresa-info {
+                    font-size: 13px;
+                    color: #6b7280;
+                }
+
+                .sacs-preview-document .doc-empresa-info p {
+                    margin: 4px 0;
+                }
+
+                .sacs-preview-document .doc-title {
+                    text-align: center;
+                    font-size: 22px;
+                    font-weight: 700;
+                    margin: 0 0 8px 0;
+                    color: #111827;
+                }
+
+                .sacs-preview-document .doc-subtitle {
+                    text-align: center;
+                    font-size: 14px;
+                    color: #6b7280;
+                    margin: 0 0 32px 0;
+                }
+
+                .sacs-preview-document .doc-section {
+                    margin-bottom: 24px;
+                }
+
+                .sacs-preview-document .doc-section-title {
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #374151;
+                    margin: 0 0 12px 0;
+                    padding-bottom: 8px;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+
+                .sacs-preview-document .doc-content {
+                    font-size: 14px;
+                    text-align: justify;
+                    white-space: pre-wrap;
+                }
+
+                .sacs-preview-document .doc-client-info {
+                    background: #f9fafb;
+                    padding: 16px;
+                    border-radius: 8px;
+                    margin-bottom: 24px;
+                }
+
+                .sacs-preview-document .doc-client-info p {
+                    margin: 6px 0;
+                    font-size: 14px;
+                }
+
+                .sacs-preview-document .doc-text {
+                    font-size: 14px;
+                    line-height: 1.8;
+                    color: #374151;
+                    margin: 16px 0;
+                    text-align: justify;
+                }
+
+                .sacs-preview-document .doc-clausula {
+                    margin-bottom: 24px;
+                }
+
+                .sacs-preview-document .doc-clausula-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 8px;
+                }
+
+                .sacs-preview-document .doc-clausula-numero {
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #1f2937;
+                }
+
+                .sacs-preview-document .doc-clausula-categoria {
+                    font-size: 10px;
+                    letter-spacing: 1px;
+                    text-transform: uppercase;
+                    background: #f3f4f6;
+                    color: #6b7280;
+                    padding: 4px 10px;
+                    border-radius: 4px;
+                    font-weight: 500;
+                }
+
+                .sacs-preview-document .doc-clausula-texto {
+                    font-size: 14px;
+                    color: #4b5563;
+                    line-height: 1.7;
+                    margin: 0;
+                    padding-left: 24px;
+                }
+
+                .sacs-preview-document .doc-fields {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 16px;
+                }
+
+                .sacs-preview-document .doc-field {
+                    padding: 12px 0;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+
+                .sacs-preview-document .doc-field-label {
+                    font-size: 10px;
+                    letter-spacing: 1px;
+                    text-transform: uppercase;
+                    color: #9ca3af;
+                    margin: 0 0 6px 0;
+                    font-weight: 500;
+                }
+
+                .sacs-preview-document .doc-field-value {
+                    font-size: 15px;
+                    color: #1f2937;
+                    margin: 0;
+                }
+
+                .sacs-preview-document .signature-section {
+                    margin-top: 32px;
+                    text-align: center;
+                }
+
+                .sacs-preview-document .signature-box {
+                    border: 1px solid #e5e7eb;
+                    padding: 24px;
+                    margin: 16px auto;
+                    max-width: 280px;
+                    border-radius: 8px;
+                }
+
+                .sacs-preview-document .signature-placeholder {
+                    color: #d1d5db;
+                    font-size: 12px;
+                    letter-spacing: 1px;
+                    text-transform: uppercase;
+                }
+
+                .sacs-preview-document .doc-footer {
+                    margin-top: 32px;
+                    padding-top: 16px;
+                    border-top: 1px solid #e5e7eb;
+                }
+
+                .sacs-preview-document .legal-text {
+                    font-size: 12px;
+                    color: #9ca3af;
+                    text-align: center;
+                    margin: 0;
+                    line-height: 1.6;
+                }
+
+                .sacs-preview-footer {
+                    padding: 16px 24px;
+                    border-top: 1px solid #e5e7eb;
+                    background: #f9fafb;
+                    text-align: center;
+                }
+
+                .sacs-preview-footer button {
+                    padding: 12px 32px;
+                    background: #6366f1;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 15px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: opacity 0.2s;
+                }
+
+                .sacs-preview-footer button:hover {
+                    opacity: 0.9;
+                }
+
+                /* ==================== FIN ESTILOS PARA TÉRMINOS Y PREVIEW ==================== */
+
                 /* ==================== FIN ESTILOS PARA FIRMA DIGITAL ==================== */
             `;
         }
@@ -1290,7 +1628,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.0</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.1</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1497,6 +1835,23 @@
                         })}</p>
                     </div>
 
+                    <!-- Términos y condiciones -->
+                    <div class="sacs-terms-container">
+                        <div class="sacs-terms-checkbox">
+                            <input type="checkbox" id="sacs-terms-checkbox" onchange="sacsCheckout.onTermsChange()">
+                            <label for="sacs-terms-checkbox">
+                                He leído y acepto los términos y condiciones del presente documento.
+                            </label>
+                        </div>
+                        <button class="sacs-preview-link" onclick="sacsCheckout.openDocumentPreview()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                            Ver documento completo
+                        </button>
+                    </div>
+
                     <div class="sacs-firma-instructions">
                         <p>✍️ Por favor, dibuje su firma en el recuadro de abajo usando el mouse o su dedo (en pantallas táctiles).</p>
                     </div>
@@ -1522,6 +1877,29 @@
                             </svg>
                             Confirmar Firma
                         </button>
+                    </div>
+                </div>
+
+                <!-- Modal de Preview del Documento -->
+                <div class="sacs-preview-overlay" id="sacs-preview-overlay">
+                    <div class="sacs-preview-modal">
+                        <div class="sacs-preview-header">
+                            <h2>Vista previa del documento</h2>
+                            <button class="sacs-preview-close-btn" onclick="sacsCheckout.closeDocumentPreview()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="sacs-preview-document" id="sacs-preview-document">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                        <div class="sacs-preview-footer">
+                            <button onclick="sacsCheckout.closeDocumentPreview()">
+                                Regresar a firmar
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1967,6 +2345,24 @@
                 btnConfirmar.addEventListener('click', () => this.confirmarFirma());
             }
 
+            // Event listeners para el modal de preview del documento
+            const previewOverlay = document.getElementById('sacs-preview-overlay');
+            if (previewOverlay) {
+                // Cerrar al hacer clic fuera del modal
+                previewOverlay.addEventListener('click', (e) => {
+                    if (e.target === previewOverlay) {
+                        this.closeDocumentPreview();
+                    }
+                });
+            }
+
+            // Cerrar modal con tecla ESC
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.closeDocumentPreview();
+                }
+            });
+
             console.log('✓ Canvas de firma inicializado');
         }
 
@@ -2012,8 +2408,7 @@
             // Marcar que se ha dibujado algo
             if (!this.firmaDibujada) {
                 this.firmaDibujada = true;
-                const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
-                if (btnConfirmar) btnConfirmar.disabled = false;
+                this.updateConfirmButtonState(); // Actualiza considerando firma + términos
 
                 const placeholder = document.getElementById('sacs-canvas-placeholder');
                 if (placeholder) placeholder.style.display = 'none';
@@ -2054,8 +2449,7 @@
             // Marcar que se ha dibujado algo
             if (!this.firmaDibujada) {
                 this.firmaDibujada = true;
-                const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
-                if (btnConfirmar) btnConfirmar.disabled = false;
+                this.updateConfirmButtonState(); // Actualiza considerando firma + términos
 
                 const placeholder = document.getElementById('sacs-canvas-placeholder');
                 if (placeholder) placeholder.style.display = 'none';
@@ -2070,8 +2464,7 @@
             this.firmaDibujada = false;
             this.firmaBase64 = null;
 
-            const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
-            if (btnConfirmar) btnConfirmar.disabled = true;
+            this.updateConfirmButtonState(); // Actualiza considerando firma + términos
 
             const placeholder = document.getElementById('sacs-canvas-placeholder');
             if (placeholder) placeholder.style.display = 'block';
@@ -2079,9 +2472,321 @@
             console.log('Firma limpiada');
         }
 
+        // ==================== FUNCIONES PARA TÉRMINOS Y PREVIEW ====================
+
+        /**
+         * Abre el modal de preview del documento
+         */
+        openDocumentPreview() {
+            const plantilla = this.config.plantillaContratos;
+            if (!plantilla) {
+                console.error('No hay plantilla de contrato disponible');
+                return;
+            }
+
+            // Renderizar el contenido del documento
+            this.renderDocumentPreview();
+
+            // Mostrar el modal
+            const overlay = document.getElementById('sacs-preview-overlay');
+            if (overlay) {
+                overlay.classList.add('active');
+            }
+        }
+
+        /**
+         * Cierra el modal de preview del documento
+         */
+        closeDocumentPreview() {
+            const overlay = document.getElementById('sacs-preview-overlay');
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+        }
+
+        /**
+         * Renderiza el contenido del documento en el modal de preview
+         */
+        renderDocumentPreview() {
+            const plantilla = this.config.plantillaContratos || {};
+            const contenido = plantilla.contenidoInfo || {};
+            const config = plantilla.config || {};
+            const general = config.general || {};
+            const empresaInfo = plantilla.empresaInfo || {};
+            const clienteInfo = this.customerInfo || {};
+
+            let html = '';
+
+            // Header del documento
+            html += '<div class="doc-header">';
+            if (general.incluirLogo && general.logoUrl) {
+                html += '<div class="doc-logo"><img src="' + general.logoUrl + '" alt="Logo"></div>';
+            }
+            html += '<h2 class="doc-company-name">' + (empresaInfo.nombre || 'Empresa') + '</h2>';
+            html += '<div class="doc-empresa-info">';
+            if (empresaInfo.rfc) html += '<p><strong>RFC:</strong> ' + empresaInfo.rfc + '</p>';
+            if (empresaInfo.direccion) html += '<p><strong>Dirección:</strong> ' + empresaInfo.direccion + '</p>';
+            if (empresaInfo.telefono) html += '<p><strong>Tel:</strong> ' + empresaInfo.telefono + '</p>';
+            html += '</div>';
+            html += '</div>';
+
+            // Título y subtítulo
+            html += '<h1 class="doc-title">' + (contenido.titulo || plantilla.nombre || 'Documento') + '</h1>';
+            if (contenido.subtitulo) {
+                html += '<p class="doc-subtitle">' + contenido.subtitulo + '</p>';
+            }
+
+            // Texto introductorio
+            if (contenido.textoIntroductorio) {
+                html += '<p class="doc-text">' + this.procesarTextoContrato(contenido.textoIntroductorio, clienteInfo, empresaInfo) + '</p>';
+            }
+
+            // Texto de aceptación
+            if (contenido.textoAceptacion) {
+                html += '<p class="doc-text"><strong>' + this.procesarTextoContrato(contenido.textoAceptacion, clienteInfo, empresaInfo) + '</strong></p>';
+            }
+
+            // Cláusulas
+            if (plantilla.clausulas && plantilla.clausulas.length > 0) {
+                html += '<div class="doc-section">';
+                html += '<h3 class="doc-section-title">Cláusulas</h3>';
+                plantilla.clausulas.forEach((clausula, index) => {
+                    html += '<div class="doc-clausula">';
+                    html += '<div class="doc-clausula-header">';
+                    html += '<span class="doc-clausula-numero">' + (index + 1) + '.</span>';
+                    if (clausula.categoria) {
+                        html += '<span class="doc-clausula-categoria">' + clausula.categoria + '</span>';
+                    }
+                    html += '</div>';
+                    html += '<p class="doc-clausula-texto">' + this.procesarTextoContrato(clausula.texto, clienteInfo, empresaInfo) + '</p>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
+            // Campos dinámicos
+            if (plantilla.camposDinamicos && plantilla.camposDinamicos.length > 0) {
+                html += '<div class="doc-section">';
+                html += '<h3 class="doc-section-title">Datos del Participante</h3>';
+                html += '<div class="doc-fields">';
+                plantilla.camposDinamicos.forEach(campo => {
+                    html += '<div class="doc-field">';
+                    html += '<p class="doc-field-label">' + campo.nombre + '</p>';
+                    html += '<p class="doc-field-value">' + this.getCampoValor(campo, clienteInfo) + '</p>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Información del cliente (si no hay campos dinámicos)
+            if (!plantilla.camposDinamicos || plantilla.camposDinamicos.length === 0) {
+                html += '<div class="doc-client-info">';
+                html += '<p><strong>Cliente:</strong> ' + (clienteInfo.nombre || 'No especificado') + '</p>';
+                if (clienteInfo.email) html += '<p><strong>Email:</strong> ' + clienteInfo.email + '</p>';
+                if (clienteInfo.telefono) html += '<p><strong>Teléfono:</strong> ' + clienteInfo.telefono + '</p>';
+                html += '<p><strong>Fecha:</strong> ' + new Date().toLocaleDateString('es-MX', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                }) + '</p>';
+                html += '</div>';
+            }
+
+            // Sección de firma
+            if (general.requiereFirma !== false) {
+                html += '<div class="signature-section">';
+                html += '<h3 class="doc-section-title">Firma del Participante</h3>';
+                html += '<div class="signature-box">';
+                html += '<p class="signature-placeholder">Espacio para firma digital</p>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Texto final
+            if (contenido.textoFinal) {
+                html += '<p class="doc-text" style="margin-top: 24px; font-style: italic;">' + this.procesarTextoContrato(contenido.textoFinal, clienteInfo, empresaInfo) + '</p>';
+            }
+
+            // Footer legal
+            const opcionesLegales = general.opcionesLegales || {};
+            html += '<div class="doc-footer">';
+            if (opcionesLegales.vigenciaDias) {
+                html += '<p class="legal-text">Este documento tiene una vigencia de ' + opcionesLegales.vigenciaDias + ' días a partir de la fecha de firma.</p>';
+            }
+            if (opcionesLegales.proteccionDatos) {
+                html += '<p class="legal-text" style="margin-top: 8px;">Los datos personales serán tratados conforme a la política de privacidad.</p>';
+            }
+            html += '</div>';
+
+            // Insertar el HTML en el modal
+            const previewDoc = document.getElementById('sacs-preview-document');
+            if (previewDoc) {
+                previewDoc.innerHTML = html;
+            }
+        }
+
+        /**
+         * Procesa texto reemplazando variables del contrato
+         */
+        procesarTextoContrato(texto, clienteInfo, empresaInfo) {
+            if (!texto) return '';
+
+            let resultado = texto;
+            const fecha = new Date().toLocaleDateString('es-MX', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            // Variables fijas del sistema
+            const variables = {
+                '{{cliente_nombre}}': clienteInfo.nombre || '[Nombre del Cliente]',
+                '{{cliente_email}}': clienteInfo.email || '[Email]',
+                '{{cliente_telefono}}': clienteInfo.telefono || '[Teléfono]',
+                '{{fecha_firma}}': fecha,
+                '{nombre_cliente}': clienteInfo.nombre || '[Nombre del Cliente]',
+                '{email}': clienteInfo.email || '[Email]',
+                '{telefono}': clienteInfo.telefono || '[Teléfono]',
+                '{fecha}': fecha,
+                '{{nombre}}': clienteInfo.nombre || '[Nombre]',
+                '{{email}}': clienteInfo.email || '[Email]',
+                '{{telefono}}': clienteInfo.telefono || '[Teléfono]',
+                '{{fecha}}': fecha,
+                '{{empresa_nombre}}': empresaInfo.nombre || '[Empresa]',
+                '{{empresa_rfc}}': empresaInfo.rfc || '[RFC]',
+                '{{empresa_direccion}}': empresaInfo.direccion || '[Dirección]',
+                '{{empresa_telefono}}': empresaInfo.telefono || '[Tel. Empresa]',
+                '{{empresa_email}}': empresaInfo.email || '[Email Empresa]',
+                '{empresa}': empresaInfo.nombre || '[Empresa]',
+                '{empresa_rfc}': empresaInfo.rfc || '[RFC]'
+            };
+
+            // Procesar campos dinámicos de la plantilla
+            const plantilla = this.config.plantillaContratos || {};
+            const camposDinamicos = plantilla.camposDinamicos || [];
+
+            if (camposDinamicos.length > 0) {
+                camposDinamicos.forEach(campo => {
+                    if (!campo || !campo.nombre) return;
+
+                    const valor = this._getCampoValueFromCliente(campo, clienteInfo) || '[' + campo.nombre + ']';
+
+                    // Usar campo.nombre (ej: "NOMBRE COMPLETO") para generar la variable
+                    // Generar variable con nombre exacto (respetando mayúsculas y espacios)
+                    const varExacta = '{{' + campo.nombre + '}}';
+                    variables[varExacta] = valor;
+
+                    // Generar variable normalizada (minúsculas, sin acentos, guiones bajos)
+                    const nombreNormalizado = this._normalizarNombreVariable(campo.nombre);
+                    const varNormalizada = '{{' + nombreNormalizado + '}}';
+                    if (varNormalizada !== varExacta) {
+                        variables[varNormalizada] = valor;
+                    }
+
+                    // Retrocompatibilidad con llave simple
+                    const varSimpleExacta = '{' + campo.nombre + '}';
+                    variables[varSimpleExacta] = valor;
+
+                    const varSimpleNormalizada = '{' + nombreNormalizado + '}';
+                    if (varSimpleNormalizada !== varSimpleExacta) {
+                        variables[varSimpleNormalizada] = valor;
+                    }
+                });
+            }
+
+            // Reemplazar todas las variables
+            for (const [variable, valor] of Object.entries(variables)) {
+                resultado = resultado.split(variable).join(valor);
+            }
+
+            return resultado;
+        }
+
+        /**
+         * Normaliza el nombre de una variable (quita acentos, espacios, etc.)
+         */
+        _normalizarNombreVariable(nombre) {
+            if (!nombre) return '';
+            return nombre
+                .toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // Quitar acentos
+                .replace(/[^a-z0-9]+/g, '_')                        // Reemplazar no-alfanuméricos con _
+                .replace(/^_+|_+$/g, '');                           // Quitar _ al inicio/fin
+        }
+
+        /**
+         * Obtiene el valor de un campo dinámico desde la info del cliente
+         */
+        _getCampoValueFromCliente(campo, clienteInfo) {
+            if (!campo || !clienteInfo) return null;
+
+            // Si la fuente es 'cliente', buscar en el objeto clienteInfo
+            if (campo.fuente === 'cliente' && campo.campoCliente) {
+                // Mapeo de campos comunes
+                const mapeoCliente = {
+                    'name': clienteInfo.nombre || clienteInfo.name,
+                    'nombre': clienteInfo.nombre || clienteInfo.name,
+                    'email': clienteInfo.email,
+                    'phone': clienteInfo.telefono || clienteInfo.phone,
+                    'telefono': clienteInfo.telefono || clienteInfo.phone
+                };
+
+                return mapeoCliente[campo.campoCliente] || clienteInfo[campo.campoCliente] || campo.valorPrueba;
+            }
+
+            // Si la fuente es 'sistema' y es tipo fecha
+            if (campo.fuente === 'sistema' && campo.tipo === 'fecha') {
+                return new Date().toLocaleDateString('es-MX', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            }
+
+            // Para otros casos, usar valorPrueba
+            return campo.valorPrueba || null;
+        }
+
+        /**
+         * Obtiene el valor de un campo dinámico (usa _getCampoValueFromCliente internamente)
+         */
+        getCampoValor(campo, clienteInfo) {
+            if (!campo) return '';
+            return this._getCampoValueFromCliente(campo, clienteInfo) || '[Sin datos]';
+        }
+
+        /**
+         * Maneja el cambio del checkbox de términos
+         */
+        onTermsChange() {
+            const checkbox = document.getElementById('sacs-terms-checkbox');
+            this.termsAccepted = checkbox ? checkbox.checked : false;
+            this.updateConfirmButtonState();
+            console.log('Términos aceptados:', this.termsAccepted);
+        }
+
+        /**
+         * Actualiza el estado del botón de confirmar firma
+         * Requiere: firma dibujada + términos aceptados
+         */
+        updateConfirmButtonState() {
+            const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
+            if (btnConfirmar) {
+                btnConfirmar.disabled = !(this.firmaDibujada && this.termsAccepted);
+            }
+        }
+
+        // ==================== FIN FUNCIONES PARA TÉRMINOS Y PREVIEW ====================
+
         async confirmarFirma() {
             if (!this.firmaDibujada) {
                 console.error('No hay firma dibujada');
+                return;
+            }
+
+            if (!this.termsAccepted) {
+                console.error('Los términos no han sido aceptados');
                 return;
             }
 
@@ -2090,6 +2795,7 @@
             this.firmaBase64 = canvas.toDataURL('image/png');
 
             console.log('✓ Firma capturada:', this.firmaBase64.substring(0, 50) + '...');
+            console.log('✓ Términos aceptados');
 
             // Ir al paso 4 (Pago)
             this.goToStep(4);
@@ -2630,6 +3336,33 @@
         volverDesdePago(id) {
             const instance = id ? this.getInstance(id) : this._getLastInstance();
             if (instance) instance.volverDesdePago();
+        },
+
+        /**
+         * Abre el modal de preview del documento
+         * @param {string} id - ID de la instancia (opcional)
+         */
+        openDocumentPreview(id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.openDocumentPreview();
+        },
+
+        /**
+         * Cierra el modal de preview del documento
+         * @param {string} id - ID de la instancia (opcional)
+         */
+        closeDocumentPreview(id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.closeDocumentPreview();
+        },
+
+        /**
+         * Maneja el cambio del checkbox de términos
+         * @param {string} id - ID de la instancia (opcional)
+         */
+        onTermsChange(id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.onTermsChange();
         },
 
         /**
