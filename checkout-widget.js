@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.1 - Soporte para botones nativos de CMS + múltiples instancias mejoradas
+ * Versión: 1.9.2 - Soporte para botones nativos de CMS + múltiples instancias mejoradas
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1628,7 +1628,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.1</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.2</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -3182,6 +3182,12 @@
                     const folio = result.data?.folio || result.folio;
                     if (folio) {
                         this.orderId = `PED-${folio}`;
+
+                        // 📧 Enviar correo de confirmación al cliente (no bloqueante)
+                        this.sendOrderEmail(folio).catch(err => {
+                            console.warn('⚠️ No se pudo enviar correo de confirmación:', err);
+                        });
+
                         return { success: true, folio: folio };
                     }
                 } else {
@@ -3208,6 +3214,192 @@
                    this.customerInfo.ciudad &&
                    this.customerInfo.codigoPostal;
         }
+
+        // ==================== FUNCIONES PARA ENVÍO DE CORREO DE CONFIRMACIÓN ====================
+
+        /**
+         * Envía correo de confirmación del pedido al cliente
+         */
+        async sendOrderEmail(folio) {
+            try {
+                const API_URL = 'https://api.sacscloud.com/v1';
+                const storeName = this.config.ecommerceConfig?.nombreTienda || 'Tienda Online';
+                const logoUrl = this.config.ecommerceConfig?.logo || null;
+
+                const htmlContent = this.generateOrderEmailHTML(folio, storeName, logoUrl);
+
+                const emailData = {
+                    to: this.customerInfo.correo,
+                    subject: `Confirmación de pedido #${folio} - ${storeName}`,
+                    htmlContent: htmlContent
+                };
+
+                console.log('📧 Enviando correo de confirmación a:', this.customerInfo.correo);
+
+                const response = await fetch(`${API_URL}/email/sendgrid`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(emailData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                console.log('✅ Correo de confirmación enviado:', result);
+                return result;
+
+            } catch (error) {
+                console.error('❌ Error enviando correo de confirmación:', error);
+                // No lanzar error para no afectar el flujo del pedido
+                return { success: false, error: error.message };
+            }
+        }
+
+        /**
+         * Genera el HTML del correo de confirmación
+         */
+        generateOrderEmailHTML(folio, storeName, logoUrl) {
+            const total = this.calculateTotal();
+            const subtotal = total / 1.16;
+            const impuestos = total - subtotal;
+            const fecha = new Date().toLocaleDateString('es-MX', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            const hora = new Date().toLocaleTimeString('es-MX', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            // Generar filas de productos
+            const productosHTML = this.cart.map(item => {
+                const precioUnitario = Number(item.precio);
+                const cantidad = Number(item.quantity);
+                const importeTotal = precioUnitario * cantidad;
+                return `
+                    <tr>
+                        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${item.nombre}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${cantidad}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">$${precioUnitario.toFixed(2)}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600; color: #059669;">$${importeTotal.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmación de Pedido #${folio}</title>
+</head>
+<body style="margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 40px 30px; text-align: center;">
+            ${logoUrl ? `<img src="${logoUrl}" alt="${storeName}" style="max-height: 60px; margin-bottom: 20px;">` : ''}
+            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">¡Pedido Confirmado!</h1>
+            <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">Gracias por tu compra, ${this.customerInfo.nombre}</p>
+        </div>
+
+        <!-- Contenido -->
+        <div style="padding: 30px;">
+
+            <!-- Número de pedido destacado -->
+            <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #22c55e; border-radius: 12px; padding: 25px; text-align: center; margin-bottom: 30px;">
+                <p style="margin: 0 0 5px 0; color: #166534; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Número de Pedido</p>
+                <h2 style="margin: 0; color: #15803d; font-size: 36px; font-weight: 700;">#${folio}</h2>
+                <p style="margin: 10px 0 0 0; color: #166534; font-size: 14px;">Guarda este número para recoger tu pedido</p>
+            </div>
+
+            <!-- Info del pedido -->
+            <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 15px 0; color: #374151; font-size: 16px;">📋 Información del Pedido</h3>
+                <table style="width: 100%;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280;">Fecha:</td>
+                        <td style="padding: 8px 0; color: #111827; text-align: right;">${fecha}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280;">Hora:</td>
+                        <td style="padding: 8px 0; color: #111827; text-align: right;">${hora}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280;">Cliente:</td>
+                        <td style="padding: 8px 0; color: #111827; text-align: right;">${this.customerInfo.nombre}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280;">Email:</td>
+                        <td style="padding: 8px 0; color: #111827; text-align: right;">${this.customerInfo.correo}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Productos -->
+            <h3 style="margin: 0 0 15px 0; color: #374151; font-size: 16px;">🛍️ Productos</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+                <thead>
+                    <tr style="background-color: #f3f4f6;">
+                        <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600;">Producto</th>
+                        <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600;">Cant.</th>
+                        <th style="padding: 12px; text-align: right; color: #374151; font-weight: 600;">Precio</th>
+                        <th style="padding: 12px; text-align: right; color: #374151; font-weight: 600;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${productosHTML}
+                </tbody>
+            </table>
+
+            <!-- Totales -->
+            <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px;">
+                <table style="width: 100%;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280;">Subtotal:</td>
+                        <td style="padding: 8px 0; color: #111827; text-align: right;">$${subtotal.toFixed(2)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #6b7280;">IVA (16%):</td>
+                        <td style="padding: 8px 0; color: #111827; text-align: right;">$${impuestos.toFixed(2)}</td>
+                    </tr>
+                    <tr style="border-top: 2px solid #e5e7eb;">
+                        <td style="padding: 15px 0 8px 0; color: #111827; font-size: 18px; font-weight: 700;">Total:</td>
+                        <td style="padding: 15px 0 8px 0; color: #059669; font-size: 18px; font-weight: 700; text-align: right;">$${total.toFixed(2)}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Instrucciones -->
+            <div style="margin-top: 30px; padding: 20px; background-color: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">📍 ¿Cómo recoger tu pedido?</h3>
+                <p style="margin: 0; color: #1e3a8a; font-size: 14px;">
+                    Presenta este número de pedido <strong>#${folio}</strong> al cajero para completar tu compra.
+                    Puedes mostrar este correo o mencionar el folio.
+                </p>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #1f2937; padding: 25px 30px; text-align: center;">
+            <p style="margin: 0 0 5px 0; color: #ffffff; font-size: 14px;">Gracias por tu preferencia</p>
+            <p style="margin: 0; color: rgba(255,255,255,0.7); font-size: 13px;">${storeName}</p>
+        </div>
+
+    </div>
+</body>
+</html>
+            `;
+        }
+
+        // ==================== FIN FUNCIONES PARA ENVÍO DE CORREO ====================
 
         showError(message) {
             const errorContainer = document.getElementById('sacs-error-container');
