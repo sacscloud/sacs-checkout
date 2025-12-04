@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.2 - Soporte para botones nativos de CMS + múltiples instancias mejoradas
+ * Versión: 1.9.4 - Logo y cover de tienda en correo de confirmación de pedido
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -279,7 +279,9 @@
 
                     if (config && config.defaults) {
                         this.config.accountDefaults = config.defaults;
+                        this.config.branding = config.branding || {};
                         console.log('✓ Account Defaults cargados:', config.defaults);
+                        console.log('✓ Branding cargado:', config.branding);
                     } else {
                         throw new Error('No se encontró configuración de defaults para esta cuenta');
                     }
@@ -1628,7 +1630,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.2</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.4</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1838,12 +1840,12 @@
                     <!-- Términos y condiciones -->
                     <div class="sacs-terms-container">
                         <div class="sacs-terms-checkbox">
-                            <input type="checkbox" id="sacs-terms-checkbox" onchange="sacsCheckout.onTermsChange()">
-                            <label for="sacs-terms-checkbox">
+                            <input type="checkbox" id="sacs-terms-checkbox-${this.instanceId}" onchange="sacsCheckout.onTermsChange('${this.instanceId}')">
+                            <label for="sacs-terms-checkbox-${this.instanceId}">
                                 He leído y acepto los términos y condiciones del presente documento.
                             </label>
                         </div>
-                        <button class="sacs-preview-link" onclick="sacsCheckout.openDocumentPreview()">
+                        <button class="sacs-preview-link" onclick="sacsCheckout.openDocumentPreview('${this.instanceId}')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                                 <circle cx="12" cy="12" r="3"/>
@@ -1857,21 +1859,21 @@
                     </div>
 
                     <div class="sacs-canvas-container">
-                        <canvas id="sacs-signature-canvas" width="540" height="200"></canvas>
-                        <div id="sacs-canvas-placeholder" class="sacs-canvas-placeholder">
+                        <canvas id="sacs-signature-canvas-${this.instanceId}" width="540" height="200"></canvas>
+                        <div id="sacs-canvas-placeholder-${this.instanceId}" class="sacs-canvas-placeholder">
                             Dibuje su firma aquí
                         </div>
                     </div>
 
                     <div class="sacs-firma-actions">
-                        <button id="sacs-limpiar-firma-btn" class="sacs-btn sacs-btn-secondary">
+                        <button id="sacs-limpiar-firma-btn-${this.instanceId}" class="sacs-btn sacs-btn-secondary">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="1 4 1 10 7 10"></polyline>
                                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                             </svg>
                             Limpiar
                         </button>
-                        <button id="sacs-confirmar-firma-btn" class="sacs-btn sacs-btn-primary" disabled>
+                        <button id="sacs-confirmar-firma-btn-${this.instanceId}" class="sacs-btn sacs-btn-primary" disabled>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
@@ -2309,7 +2311,7 @@
         // ==================== MÉTODOS DEL CANVAS DE FIRMA ====================
 
         initCanvasFirma() {
-            const canvas = document.getElementById('sacs-signature-canvas');
+            const canvas = document.getElementById(`sacs-signature-canvas-${this.instanceId}`);
             if (!canvas) {
                 console.error('Canvas de firma no encontrado');
                 return;
@@ -2334,8 +2336,8 @@
             canvas.addEventListener('touchcancel', () => this.stopDrawing());
 
             // Event listeners para botones de firma
-            const btnLimpiar = document.getElementById('sacs-limpiar-firma-btn');
-            const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
+            const btnLimpiar = document.getElementById(`sacs-limpiar-firma-btn-${this.instanceId}`);
+            const btnConfirmar = document.getElementById(`sacs-confirmar-firma-btn-${this.instanceId}`);
 
             if (btnLimpiar) {
                 btnLimpiar.addEventListener('click', () => this.limpiarFirma());
@@ -2363,7 +2365,7 @@
                 }
             });
 
-            console.log('✓ Canvas de firma inicializado');
+            console.log('✓ Canvas de firma inicializado para instancia:', this.instanceId);
         }
 
         getMousePos(canvas, evt) {
@@ -2384,7 +2386,7 @@
 
         startDrawing(e) {
             this.isDrawing = true;
-            const canvas = document.getElementById('sacs-signature-canvas');
+            const canvas = document.getElementById(`sacs-signature-canvas-${this.instanceId}`);
             const pos = this.getMousePos(canvas, e);
             this.lastX = pos.x;
             this.lastY = pos.y;
@@ -2393,7 +2395,7 @@
         draw(e) {
             if (!this.isDrawing) return;
 
-            const canvas = document.getElementById('sacs-signature-canvas');
+            const canvas = document.getElementById(`sacs-signature-canvas-${this.instanceId}`);
             const ctx = canvas.getContext('2d');
             const pos = this.getMousePos(canvas, e);
 
@@ -2407,10 +2409,11 @@
 
             // Marcar que se ha dibujado algo
             if (!this.firmaDibujada) {
+                console.log('✍️ Primera marca de firma detectada (mouse)');
                 this.firmaDibujada = true;
                 this.updateConfirmButtonState(); // Actualiza considerando firma + términos
 
-                const placeholder = document.getElementById('sacs-canvas-placeholder');
+                const placeholder = document.getElementById(`sacs-canvas-placeholder-${this.instanceId}`);
                 if (placeholder) placeholder.style.display = 'none';
             }
         }
@@ -2421,7 +2424,7 @@
 
         handleTouchStart(e) {
             e.preventDefault();
-            const canvas = document.getElementById('sacs-signature-canvas');
+            const canvas = document.getElementById(`sacs-signature-canvas-${this.instanceId}`);
             const touch = e.touches[0];
             const pos = this.getTouchPos(canvas, touch);
             this.isDrawing = true;
@@ -2433,7 +2436,7 @@
             if (!this.isDrawing) return;
             e.preventDefault();
 
-            const canvas = document.getElementById('sacs-signature-canvas');
+            const canvas = document.getElementById(`sacs-signature-canvas-${this.instanceId}`);
             const ctx = canvas.getContext('2d');
             const touch = e.touches[0];
             const pos = this.getTouchPos(canvas, touch);
@@ -2448,16 +2451,17 @@
 
             // Marcar que se ha dibujado algo
             if (!this.firmaDibujada) {
+                console.log('✍️ Primera marca de firma detectada (touch)');
                 this.firmaDibujada = true;
                 this.updateConfirmButtonState(); // Actualiza considerando firma + términos
 
-                const placeholder = document.getElementById('sacs-canvas-placeholder');
+                const placeholder = document.getElementById(`sacs-canvas-placeholder-${this.instanceId}`);
                 if (placeholder) placeholder.style.display = 'none';
             }
         }
 
         limpiarFirma() {
-            const canvas = document.getElementById('sacs-signature-canvas');
+            const canvas = document.getElementById(`sacs-signature-canvas-${this.instanceId}`);
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -2466,7 +2470,7 @@
 
             this.updateConfirmButtonState(); // Actualiza considerando firma + términos
 
-            const placeholder = document.getElementById('sacs-canvas-placeholder');
+            const placeholder = document.getElementById(`sacs-canvas-placeholder-${this.instanceId}`);
             if (placeholder) placeholder.style.display = 'block';
 
             console.log('Firma limpiada');
@@ -2760,10 +2764,13 @@
          * Maneja el cambio del checkbox de términos
          */
         onTermsChange() {
-            const checkbox = document.getElementById('sacs-terms-checkbox');
+            console.log('📋 onTermsChange llamado en instancia:', this.instanceId);
+            const checkbox = document.getElementById(`sacs-terms-checkbox-${this.instanceId}`);
+            console.log('   - checkbox encontrado:', !!checkbox);
+            console.log('   - checkbox.checked:', checkbox?.checked);
             this.termsAccepted = checkbox ? checkbox.checked : false;
+            console.log('   - this.termsAccepted seteado a:', this.termsAccepted);
             this.updateConfirmButtonState();
-            console.log('Términos aceptados:', this.termsAccepted);
         }
 
         /**
@@ -2771,9 +2778,16 @@
          * Requiere: firma dibujada + términos aceptados
          */
         updateConfirmButtonState() {
-            const btnConfirmar = document.getElementById('sacs-confirmar-firma-btn');
+            const btnConfirmar = document.getElementById(`sacs-confirmar-firma-btn-${this.instanceId}`);
+            console.log('🔄 updateConfirmButtonState llamado para instancia:', this.instanceId);
+            console.log('   - firmaDibujada:', this.firmaDibujada);
+            console.log('   - termsAccepted:', this.termsAccepted);
+            console.log('   - btnConfirmar encontrado:', !!btnConfirmar);
             if (btnConfirmar) {
-                btnConfirmar.disabled = !(this.firmaDibujada && this.termsAccepted);
+                const shouldEnable = this.firmaDibujada && this.termsAccepted;
+                console.log('   - shouldEnable:', shouldEnable);
+                btnConfirmar.disabled = !shouldEnable;
+                console.log('   - btnConfirmar.disabled:', btnConfirmar.disabled);
             }
         }
 
@@ -2791,7 +2805,7 @@
             }
 
             // Convertir canvas a base64
-            const canvas = document.getElementById('sacs-signature-canvas');
+            const canvas = document.getElementById(`sacs-signature-canvas-${this.instanceId}`);
             this.firmaBase64 = canvas.toDataURL('image/png');
 
             console.log('✓ Firma capturada:', this.firmaBase64.substring(0, 50) + '...');
@@ -3218,15 +3232,48 @@
         // ==================== FUNCIONES PARA ENVÍO DE CORREO DE CONFIRMACIÓN ====================
 
         /**
+         * Obtiene el logo de la sucursal desde MongoDB
+         */
+        async getSucursalLogo(accountId, sucursalFid) {
+            const API_URL = 'https://api.sacscloud.com/v1';
+
+            try {
+                const response = await fetch(`${API_URL}/rest/${accountId}/sucursales/aggregate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pipeline: [
+                            { $match: { fid: sucursalFid } },
+                            { $project: { logo: 1 } },
+                            { $limit: 1 }
+                        ]
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                    return result.data[0].logo || null;
+                }
+                return null;
+            } catch (error) {
+                console.warn('⚠️ No se pudo obtener logo de sucursal:', error);
+                return null;
+            }
+        }
+
+        /**
          * Envía correo de confirmación del pedido al cliente
          */
         async sendOrderEmail(folio) {
             try {
                 const API_URL = 'https://api.sacscloud.com/v1';
-                const storeName = this.config.ecommerceConfig?.nombreTienda || 'Tienda Online';
-                const logoUrl = this.config.ecommerceConfig?.logo || null;
+                const branding = this.config.branding || {};
+                const storeName = branding.storeName || this.config.ecommerceConfig?.nombreTienda || 'Tienda Online';
+                const logoUrl = branding.logo || null;
+                const coverUrl = branding.coverImage || null;
 
-                const htmlContent = this.generateOrderEmailHTML(folio, storeName, logoUrl);
+                const htmlContent = this.generateOrderEmailHTML(folio, storeName, logoUrl, coverUrl);
 
                 const emailData = {
                     to: this.customerInfo.correo,
@@ -3262,7 +3309,7 @@
         /**
          * Genera el HTML del correo de confirmación
          */
-        generateOrderEmailHTML(folio, storeName, logoUrl) {
+        generateOrderEmailHTML(folio, storeName, logoUrl, coverUrl) {
             const total = this.calculateTotal();
             const subtotal = total / 1.16;
             const impuestos = total - subtotal;
@@ -3291,6 +3338,11 @@
                 `;
             }).join('');
 
+            // Header con cover o gradiente por defecto
+            const headerStyle = coverUrl
+                ? `background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.6)), url('${coverUrl}'); background-size: cover; background-position: center;`
+                : `background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);`;
+
             return `
 <!DOCTYPE html>
 <html lang="es">
@@ -3302,11 +3354,15 @@
 <body style="margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
 
-        <!-- Header -->
-        <div style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 40px 30px; text-align: center;">
-            ${logoUrl ? `<img src="${logoUrl}" alt="${storeName}" style="max-height: 60px; margin-bottom: 20px;">` : ''}
-            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">¡Pedido Confirmado!</h1>
-            <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">Gracias por tu compra, ${this.customerInfo.nombre}</p>
+        <!-- Header con Cover y Logo -->
+        <div style="${headerStyle} padding: 40px 30px; text-align: center;">
+            ${logoUrl ? `
+            <div style="background: rgba(255,255,255,0.95); border-radius: 12px; padding: 15px 25px; display: inline-block; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <img src="${logoUrl}" alt="${storeName}" style="max-height: 50px; max-width: 180px; display: block;">
+            </div>
+            ` : ''}
+            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">¡Pedido Confirmado!</h1>
+            <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.95); font-size: 16px; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">Gracias por tu compra, ${this.customerInfo.nombre}</p>
         </div>
 
         <!-- Contenido -->
@@ -3462,7 +3518,17 @@
          * checkout.open();
          */
         getInstance(id) {
-            return this.instances[id] || null;
+            // Primero buscar por key directa (containerId o configId)
+            if (this.instances[id]) {
+                return this.instances[id];
+            }
+            // Si no, buscar por instanceId
+            for (const key in this.instances) {
+                if (this.instances[key].instanceId === id) {
+                    return this.instances[key];
+                }
+            }
+            return null;
         },
 
         /**
