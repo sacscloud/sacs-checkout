@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.4 - Logo y cover de tienda en correo de confirmación de pedido
+ * Versión: 1.9.5 - Soporte para cantidadDefault en productos
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -149,9 +149,10 @@
             console.log('🎨 Estilos botón checkout:', this.config.checkoutButtonStyles);
 
             // Inicializar carrito con productos preconfigurados
+            // Usar cantidadDefault del producto si está configurada, sino 1
             this.cart = this.config.products.map(product => ({
                 ...product,
-                quantity: 1
+                quantity: product.cantidadDefault || 1
             }));
 
             // Cargar Stripe.js (esperar a que termine)
@@ -1630,7 +1631,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.4</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.5</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
