@@ -1724,7 +1724,7 @@
                             }
                             <div class="sacs-item-info">
                                 <h3 class="sacs-item-name">${item.nombre}</h3>
-                                <p class="sacs-item-variant">${item.variant || 'Sin variante'}</p>
+                                ${item.variant ? `<p class="sacs-item-variant">${item.variant}</p>` : ''}
                                 <div class="sacs-item-footer">
                                     <div class="sacs-quantity-control">
                                         <button class="sacs-qty-btn" onclick="sacsCheckout.updateQuantity(${index}, ${item.quantity - 1})" ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
@@ -1749,7 +1749,7 @@
                         </svg>
                         Atrás
                     </button>
-                    <h2 class="sacs-page-title">Información de Envío</h2>
+                    <h2 class="sacs-page-title">Información general</h2>
 
                     <div id="sacs-error-container"></div>
 
@@ -1762,7 +1762,7 @@
                     </div>
 
                     <div style="margin-bottom: 32px;">
-                        <h3 class="sacs-section-title">ENVÍO</h3>
+                        <h3 class="sacs-section-title">Información general</h3>
                         <div class="sacs-form-group">
                             <label class="sacs-form-label">Nombre Completo</label>
                             <input type="text" class="sacs-form-input" id="sacs-nombre" value="${this.customerInfo.nombre}" placeholder="Juan Pérez" required>
