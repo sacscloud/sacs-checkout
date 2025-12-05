@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.6 - Fix mapeo de email/telefono en preview de contrato
+ * Versión: 1.9.7 - QR y código de barras en correo de confirmación
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1631,7 +1631,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.6</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.7</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -3373,11 +3373,27 @@
         <!-- Contenido -->
         <div style="padding: 30px;">
 
-            <!-- Número de pedido destacado -->
+            <!-- Número de pedido destacado con QR y Código de Barras -->
             <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #22c55e; border-radius: 12px; padding: 25px; text-align: center; margin-bottom: 30px;">
                 <p style="margin: 0 0 5px 0; color: #166534; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Número de Pedido</p>
                 <h2 style="margin: 0; color: #15803d; font-size: 36px; font-weight: 700;">#${folio}</h2>
                 <p style="margin: 10px 0 0 0; color: #166534; font-size: 14px;">Guarda este número para recoger tu pedido</p>
+
+                <!-- QR Code -->
+                <div style="margin-top: 20px;">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('Pedido: ' + folio + ' | Total: $' + total.toFixed(2) + ' | ' + storeName)}"
+                         alt="QR Pedido ${folio}"
+                         style="width: 150px; height: 150px; border-radius: 8px; background: white; padding: 8px;">
+                </div>
+
+                <!-- Código de Barras -->
+                <div style="margin-top: 15px;">
+                    <img src="https://barcodeapi.org/api/128/${folio}"
+                         alt="Código de barras ${folio}"
+                         style="max-width: 200px; height: auto; background: white; padding: 8px; border-radius: 4px;">
+                </div>
+
+                <p style="margin: 15px 0 0 0; color: #166534; font-size: 12px;">Presenta cualquiera de estos códigos al recoger tu pedido</p>
             </div>
 
             <!-- Info del pedido -->
