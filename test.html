@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test - Múltiples Botones SACS Checkout v1.9.5</title>
+    <title>Test - SACS Checkout v1.9.6</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -28,37 +28,23 @@
     </style>
 </head>
 <body>
-    <h1>Test: Múltiples Botones de Checkout v1.9.5</h1>
-    <p>Esta página prueba 2 botones diferentes con IDs únicos (containerId).</p>
+    <h1>Test: SACS Checkout v1.9.5</h1>
+    <p>Prueba del widget con tenant Artik</p>
 
-    <!-- Cargar widget UNA sola vez -->
-    <!-- <script src="https://cdn.jsdelivr.net/gh/sacscloud/sacs-checkout@master/checkout-widget.js"></script> -->
+    <!-- Cargar widget local -->
     <script src="checkout-widget.js"></script>
 
-    <!-- BOTÓN 1 -->
+    <!-- BOTÓN ARTIK -->
     <div class="button-container">
-        <h2>Botón 1</h2>
-        <div id="btn-1763670577456-0fonqnhdv"></div>
-    </div>
-
-    <!-- BOTÓN 2 -->
-    <div class="button-container">
-        <h2>Botón 2</h2>
-        <div id="btn-1763671179823-qlv6rm86e"></div>
+        <h2>Artik - Test Firma</h2>
+        <div id="btn-1764889609078-12cesvr0d"></div>
     </div>
 
     <script>
-      // Inicializar ambos botones con IDs únicos
       sacsCheckout.init({
-        accountId: 'pruebaskpop',
-        configId: 'btn-1763670577456-0fonqnhdv',
-        containerId: 'btn-1763670577456-0fonqnhdv'
-      });
-
-      sacsCheckout.init({
-        accountId: 'pruebaskpop',
-        configId: 'btn-1763671179823-qlv6rm86e',
-        containerId: 'btn-1763671179823-qlv6rm86e'
+        accountId: 'artik',
+        configId: 'btn-1764889609078-12cesvr0d',
+        containerId: 'btn-1764889609078-12cesvr0d'
       });
     </script>
 

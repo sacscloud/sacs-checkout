@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.5 - Soporte para cantidadDefault en productos
+ * Versión: 1.9.6 - Fix mapeo de email/telefono en preview de contrato
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1631,7 +1631,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.5</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.6</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2518,7 +2518,11 @@
             const config = plantilla.config || {};
             const general = config.general || {};
             const empresaInfo = plantilla.empresaInfo || {};
-            const clienteInfo = this.customerInfo || {};
+            const clienteInfo = {
+                ...this.customerInfo,
+                email: this.customerInfo?.correo || this.customerInfo?.email || '',
+                telefono: this.customerInfo?.telefono || this.customerInfo?.phone || ''
+            };
 
             let html = '';
 
