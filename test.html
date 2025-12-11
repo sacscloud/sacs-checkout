@@ -28,23 +28,23 @@
     </style>
 </head>
 <body>
-    <h1>Test: SACS Checkout v1.9.5</h1>
-    <p>Prueba del widget con tenant Artik</p>
+    <h1>Test: SACS Checkout v1.9.8</h1>
+    <p>Prueba del widget con tenant pruebaskpop</p>
 
     <!-- Cargar widget local -->
     <script src="checkout-widget.js"></script>
 
-    <!-- BOTÓN ARTIK -->
+    <!-- BOTÓN PRUEBASKPOP -->
     <div class="button-container">
-        <h2>Artik - Test Firma</h2>
-        <div id="btn-1764889609078-12cesvr0d"></div>
+        <h2>Pruebaskpop - Test Cantidad 0</h2>
+        <button onclick="sacsCheckout.open('btn-1763671179823-qlv6rm86e')" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Abrir Checkout</button>
     </div>
 
     <script>
       sacsCheckout.init({
-        accountId: 'artik',
-        configId: 'btn-1764889609078-12cesvr0d',
-        containerId: 'btn-1764889609078-12cesvr0d'
+        accountId: 'pruebaskpop',
+        configId: 'btn-1763671179823-qlv6rm86e',
+        renderButton: false
       });
     </script>
 

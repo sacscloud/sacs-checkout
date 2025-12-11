@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.7 - QR y código de barras en correo de confirmación
+ * Versión: 1.9.8 - Permitir cantidad 0 en productos del carrito
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1631,7 +1631,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.7</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.8</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1730,7 +1730,7 @@
                                 ${item.variant ? `<p class="sacs-item-variant">${item.variant}</p>` : ''}
                                 <div class="sacs-item-footer">
                                     <div class="sacs-quantity-control">
-                                        <button class="sacs-qty-btn" onclick="sacsCheckout.updateQuantity(${index}, ${item.quantity - 1})" ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
+                                        <button class="sacs-qty-btn" onclick="sacsCheckout.updateQuantity(${index}, ${item.quantity - 1})">−</button>
                                         <span class="sacs-qty-display">${item.quantity}</span>
                                         <button class="sacs-qty-btn" onclick="sacsCheckout.updateQuantity(${index}, ${item.quantity + 1})">+</button>
                                     </div>
@@ -2282,7 +2282,7 @@
         }
 
         updateQuantity(index, newQuantity) {
-            if (newQuantity < 1) return;
+            if (newQuantity < 0) return;
             this.cart[index].quantity = newQuantity;
             this.render();
         }
