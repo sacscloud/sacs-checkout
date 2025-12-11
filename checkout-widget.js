@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.8 - Permitir cantidad 0 en productos del carrito
+ * Versión: 1.9.9 - Drawer compacto y tarjetas en paso de pago
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -492,7 +492,7 @@
                     right: 0;
                     bottom: 0;
                     width: 100%;
-                    max-width: 640px;
+                    max-width: 400px;
                     background: ${this.config.drawerStyles.backgroundColor || '#1F2937'};
                     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
                     z-index: 999999;
@@ -509,19 +509,19 @@
                 }
 
                 .sacs-drawer-header {
-                    padding: 32px 32px 24px;
+                    padding: 16px 16px 12px;
                     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                     position: relative;
                 }
 
                 .sacs-close-btn {
                     position: absolute;
-                    top: 24px;
-                    right: 24px;
+                    top: 12px;
+                    right: 12px;
                     background: none;
                     border: none;
-                    width: 32px;
-                    height: 32px;
+                    width: 28px;
+                    height: 28px;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
@@ -535,23 +535,23 @@
                 }
 
                 .sacs-drawer-title {
-                    font-size: 32px;
+                    font-size: 20px;
                     font-weight: 700;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
-                    margin: 0 0 32px 0;
+                    margin: 0 0 12px 0;
                 }
 
                 .sacs-stepper {
                     display: flex;
-                    gap: 24px;
+                    gap: 8px;
                     align-items: center;
                 }
 
                 .sacs-step {
                     display: flex;
                     align-items: center;
-                    gap: 12px;
-                    font-size: 16px;
+                    gap: 4px;
+                    font-size: 12px;
                     color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     transition: all 0.3s;
                 }
@@ -567,14 +567,14 @@
                 }
 
                 .sacs-step-number {
-                    width: 40px;
-                    height: 40px;
+                    width: 24px;
+                    height: 24px;
                     border-radius: 4px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     font-weight: 600;
-                    font-size: 18px;
+                    font-size: 12px;
                     background: #F3F4F6;
                     color: #9CA3AF;
                     transition: all 0.3s;
@@ -600,36 +600,36 @@
                 .sacs-drawer-body {
                     flex: 1;
                     overflow-y: auto;
-                    padding: 32px;
+                    padding: 16px;
                 }
 
                 .sacs-cart-item {
                     display: flex;
-                    gap: 20px;
-                    padding: 24px;
-                    margin-bottom: 16px;
+                    gap: 12px;
+                    padding: 12px;
+                    margin-bottom: 8px;
                     background: rgba(255, 255, 255, 0.05);
                     border: 1px solid rgba(255, 255, 255, 0.1);
-                    border-radius: 8px;
+                    border-radius: 6px;
                 }
 
                 .sacs-cart-item:first-child {
-                    padding: 24px;
+                    padding: 12px;
                 }
 
                 .sacs-item-image {
-                    width: 80px;
-                    height: 80px;
+                    width: 48px;
+                    height: 48px;
                     object-fit: cover;
-                    border-radius: 8px;
+                    border-radius: 6px;
                     background: #F3F4F6;
                     flex-shrink: 0;
                 }
 
                 .sacs-item-placeholder {
-                    width: 80px;
-                    height: 80px;
-                    border-radius: 8px;
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 6px;
                     background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
                     border: 1px solid #93C5FD;
                     flex-shrink: 0;
@@ -637,7 +637,7 @@
                     align-items: center;
                     justify-content: center;
                     font-weight: 700;
-                    font-size: 32px;
+                    font-size: 18px;
                     color: #1E40AF;
                     text-transform: uppercase;
                     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
@@ -647,18 +647,18 @@
                     flex: 1;
                     display: flex;
                     flex-direction: column;
-                    gap: 8px;
+                    gap: 4px;
                 }
 
                 .sacs-item-name {
                     font-weight: 600;
-                    font-size: 18px;
+                    font-size: 14px;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     margin: 0;
                 }
 
                 .sacs-item-variant {
-                    font-size: 14px;
+                    font-size: 12px;
                     color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     margin: 0;
                 }
@@ -681,15 +681,15 @@
                 }
 
                 .sacs-qty-btn {
-                    width: 40px;
-                    height: 40px;
+                    width: 28px;
+                    height: 28px;
                     border: none;
                     background: transparent;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 18px;
+                    font-size: 14px;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                     transition: background 0.2s;
                     border-right: 1px solid rgba(255, 255, 255, 0.2);
@@ -710,51 +710,52 @@
                 }
 
                 .sacs-qty-display {
-                    width: 40px;
+                    width: 28px;
                     text-align: center;
                     font-weight: 500;
+                    font-size: 13px;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                 }
 
                 .sacs-item-price {
                     font-weight: 600;
-                    font-size: 18px;
+                    font-size: 14px;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                 }
 
                 .sacs-drawer-footer {
-                    padding: 24px 32px;
+                    padding: 12px 16px;
                     border-top: 1px solid rgba(255, 255, 255, 0.1);
                     background: ${this.config.drawerStyles.backgroundColor || '#1F2937'};
                 }
 
                 .sacs-summary {
-                    margin-bottom: 24px;
+                    margin-bottom: 12px;
                 }
 
                 .sacs-summary-row {
                     display: flex;
                     justify-content: space-between;
-                    margin-bottom: 12px;
-                    font-size: 16px;
+                    margin-bottom: 6px;
+                    font-size: 14px;
                     color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                 }
 
                 .sacs-summary-row.total {
-                    margin-top: 12px;
-                    padding-top: 12px;
+                    margin-top: 8px;
+                    padding-top: 8px;
                     border-top: 1px solid rgba(255, 255, 255, 0.1);
-                    font-size: 20px;
+                    font-size: 16px;
                     font-weight: 700;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
                 }
 
                 .sacs-btn {
                     width: 100%;
-                    padding: 16px;
+                    padding: 12px;
                     border: none;
                     border-radius: 4px;
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.2s;
@@ -780,32 +781,32 @@
                 }
 
                 .sacs-section-title {
-                    font-size: 14px;
+                    font-size: 11px;
                     font-weight: 600;
                     color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
-                    margin: 0 0 16px 0;
+                    margin: 0 0 8px 0;
                 }
 
                 .sacs-form-group {
-                    margin-bottom: 20px;
+                    margin-bottom: 12px;
                 }
 
                 .sacs-form-label {
                     display: block;
-                    font-size: 15px;
+                    font-size: 12px;
                     font-weight: 500;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
-                    margin-bottom: 8px;
+                    margin-bottom: 4px;
                 }
 
                 .sacs-form-input {
                     width: 100%;
-                    padding: 12px 16px;
+                    padding: 8px 12px;
                     border: 1px solid ${this.config.drawerStyles.secondaryTextColor || '#6B7280'};
                     border-radius: 4px;
-                    font-size: 15px;
+                    font-size: 13px;
                     font-family: inherit;
                     transition: all 0.2s;
                     background: transparent;
@@ -826,20 +827,20 @@
                 .sacs-form-row {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
-                    gap: 16px;
+                    gap: 10px;
                 }
 
                 .sacs-back-btn {
                     display: flex;
                     align-items: center;
-                    gap: 8px;
+                    gap: 4px;
                     background: none;
                     border: none;
-                    font-size: 16px;
+                    font-size: 13px;
                     color: ${this.config.drawerStyles.secondaryTextColor || '#9CA3AF'};
                     cursor: pointer;
                     padding: 0;
-                    margin-bottom: 32px;
+                    margin-bottom: 12px;
                     font-family: inherit;
                     font-weight: 500;
                 }
@@ -849,10 +850,10 @@
                 }
 
                 .sacs-page-title {
-                    font-size: 32px;
+                    font-size: 18px;
                     font-weight: 700;
                     color: ${this.config.drawerStyles.primaryTextColor || '#FFFFFF'};
-                    margin: 0 0 32px 0;
+                    margin: 0 0 12px 0;
                 }
 
                 .sacs-success-container {
@@ -1631,7 +1632,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.8</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.9</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1756,7 +1757,7 @@
 
                     <div id="sacs-error-container"></div>
 
-                    <div style="margin-bottom: 32px;">
+                    <div style="margin-bottom: 12px;">
                         <h3 class="sacs-section-title">CONTACTO</h3>
                         <div class="sacs-form-group">
                             <label class="sacs-form-label">Correo Electrónico</label>
@@ -1764,7 +1765,7 @@
                         </div>
                     </div>
 
-                    <div style="margin-bottom: 32px;">
+                    <div style="margin-bottom: 12px;">
                         <h3 class="sacs-section-title">Información general</h3>
                         <div class="sacs-form-group">
                             <label class="sacs-form-label">Nombre Completo</label>
@@ -2182,7 +2183,7 @@
                         <span id="sacs-btn-text">${this.currentStep === 1 ? 'Continuar' : 'Completar Compra'}</span>
                         <span id="sacs-btn-spinner" style="display: none;" class="sacs-spinner"></span>
                     </button>
-                    ${this.currentStep === 1 ? `
+                    ${this.currentStep === 4 ? `
                         <div class="sacs-payment-icons">
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%231434CB' width='48' height='32' rx='4'/%3E%3Ctext x='24' y='20' font-family='Arial' font-size='12' font-weight='bold' fill='white' text-anchor='middle'%3EVISA%3C/text%3E%3C/svg%3E" alt="Visa">
                             <img class="sacs-payment-icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 32'%3E%3Crect fill='%23EB001B' width='48' height='32' rx='4'/%3E%3Ccircle cx='18' cy='16' r='8' fill='%23EB001B'/%3E%3Ccircle cx='30' cy='16' r='8' fill='%23F79E1B'/%3E%3C/svg%3E" alt="Mastercard">
@@ -2284,7 +2285,18 @@
         updateQuantity(index, newQuantity) {
             if (newQuantity < 0) return;
             this.cart[index].quantity = newQuantity;
+
+            // Guardar posición del scroll antes de re-renderizar
+            const drawerBody = document.querySelector('.sacs-drawer-body');
+            const scrollTop = drawerBody ? drawerBody.scrollTop : 0;
+
             this.render();
+
+            // Restaurar posición del scroll
+            const newDrawerBody = document.querySelector('.sacs-drawer-body');
+            if (newDrawerBody) {
+                newDrawerBody.scrollTop = scrollTop;
+            }
         }
 
         calculateTotal() {
