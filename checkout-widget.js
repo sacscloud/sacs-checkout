@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.9 - Drawer compacto y tarjetas en paso de pago
+ * Versión: 1.9.10 - Fix zona horaria en fecha de pedidos
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1632,7 +1632,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.9</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.10</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2999,8 +2999,10 @@
 
             try {
                 const now = Date.now();
-                const fecha = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-                const hora = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
+                const ahora = new Date();
+                // Usar zona horaria de México para fecha y hora
+                const fecha = ahora.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }); // YYYY-MM-DD
+                const hora = ahora.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour12: false }); // HH:MM:SS
 
                 // Calcular subtotal sin IVA (16%)
                 const subtotal = total / 1.16;
