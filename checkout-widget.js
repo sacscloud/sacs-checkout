@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.10 - Fix zona horaria en fecha de pedidos
+ * Versión: 1.9.11 - Status de preparación configurable desde Smart Cart
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -217,6 +217,11 @@
                     // Cargar estilos del botón de checkout
                     if (config.checkoutButtonStyles) {
                         this.config.checkoutButtonStyles = {...this.config.checkoutButtonStyles, ...config.checkoutButtonStyles};
+                    }
+
+                    // Cargar configuración por defecto (statusPreparado para pedidos)
+                    if (config.defaultConfig) {
+                        this.config.defaultConfig = config.defaultConfig;
                     }
 
                     console.log('✓ Configuración de eCommerce cargada desde MongoDB');
@@ -1632,7 +1637,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.10</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.11</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -3069,7 +3074,7 @@
                     moneda_prefijo: "$",
                     status: "Abierto",
                     statusPago: paymentStatus === 'succeeded' ? "Pagado" : "Pendiente",
-                    statusPreparado: "No preparado",
+                    statusPreparado: this.config.defaultConfig?.statusPreparado || "Preparado",
                     canal: "Online - eCommerce Widget",
                     articulos: `${this.cart.length} articulos`,
                     uid: "-OUjfwh092oLaxFt0_T1",
