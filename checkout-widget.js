@@ -3074,7 +3074,7 @@
                     moneda_prefijo: "$",
                     status: "Abierto",
                     statusPago: paymentStatus === 'succeeded' ? "Pagado" : "Pendiente",
-                    statusPreparado: this.config.defaultConfig?.statusPreparado || "Preparado",
+                    statusPreparado: this.config.accountDefaults?.statusPreparado || this.config.defaultConfig?.statusPreparado || "Preparado",
                     canal: "Online - eCommerce Widget",
                     articulos: `${this.cart.length} articulos`,
                     uid: "-OUjfwh092oLaxFt0_T1",
