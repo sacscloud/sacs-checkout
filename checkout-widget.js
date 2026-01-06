@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.12 - Leer statusPreparado de store_config (Tienda Online)
+ * Versión: 1.9.13 - Verificar pedido existe antes de mostrar error en Safari/iOS
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1637,7 +1637,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.12</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.13</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2869,12 +2869,21 @@
                 // El pago fue exitoso pero falló la creación del pedido
                 console.error('❌ Pago exitoso pero error al crear pedido con firma:', orderError);
 
-                // Guardar error para mostrarlo
-                this.paymentError = orderError;
+                // Verificar si el pedido se creó a pesar del error (típico de Safari/iOS)
+                const verification = await this.verifyOrderExists(this.paymentIntentId);
 
-                // Ir a pantalla de error especial (paso 99)
-                this.currentStep = 99;
-                this.render();
+                if (verification.exists) {
+                    // El pedido SÍ se creó, mostrar éxito
+                    console.log('✅ El pedido sí se creó correctamente, mostrando éxito');
+                    this.orderId = `PED-${verification.folio}`;
+                    this.currentStep = 5;
+                    this.render();
+                } else {
+                    // El pedido NO se creó, mostrar error
+                    this.paymentError = orderError;
+                    this.currentStep = 99;
+                    this.render();
+                }
             }
         }
 
@@ -2976,12 +2985,21 @@
                     // El pago fue exitoso pero falló la creación del pedido
                     console.error('❌ Pago exitoso pero error al crear pedido:', orderError);
 
-                    // Guardar error para mostrarlo
-                    this.paymentError = orderError;
+                    // Verificar si el pedido se creó a pesar del error (típico de Safari/iOS)
+                    const verification = await this.verifyOrderExists(paymentIntent.id);
 
-                    // Ir a pantalla de error especial (paso 99)
-                    this.currentStep = 99;
-                    this.render();
+                    if (verification.exists) {
+                        // El pedido SÍ se creó, mostrar éxito
+                        console.log('✅ El pedido sí se creó correctamente, mostrando éxito');
+                        this.orderId = `PED-${verification.folio}`;
+                        this.currentStep = 5;
+                        this.render();
+                    } else {
+                        // El pedido NO se creó, mostrar error
+                        this.paymentError = orderError;
+                        this.currentStep = 99;
+                        this.render();
+                    }
 
                     // Re-habilitar botón por si el usuario quiere cerrar
                     payBtn.disabled = false;
@@ -3251,6 +3269,45 @@
                    this.customerInfo.direccion &&
                    this.customerInfo.ciudad &&
                    this.customerInfo.codigoPostal;
+        }
+
+        /**
+         * Verifica si el pedido ya existe buscando por stripe_payment_intent_id
+         * Útil cuando Safari/iOS corta la conexión pero el pedido sí se creó
+         */
+        async verifyOrderExists(paymentIntentId) {
+            const API_URL = 'https://api.sacscloud.com/v1';
+
+            try {
+                console.log('🔍 Verificando si el pedido existe para:', paymentIntentId);
+
+                const response = await fetch(`${API_URL}/pedidos/get`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        account: this.config.accountId,
+                        aggregate: [
+                            { $match: { stripe_payment_intent_id: paymentIntentId } },
+                            { $limit: 1 }
+                        ]
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data?.items?.length > 0) {
+                    const pedido = result.data.items[0];
+                    console.log('✅ Pedido encontrado:', pedido.folio);
+                    return { exists: true, folio: pedido.folio };
+                }
+
+                console.log('❌ Pedido no encontrado');
+                return { exists: false };
+
+            } catch (error) {
+                console.error('Error verificando pedido:', error);
+                return { exists: false };
+            }
         }
 
         // ==================== FUNCIONES PARA ENVÍO DE CORREO DE CONFIRMACIÓN ====================
