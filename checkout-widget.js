@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.14 - Alerta cuando store_config no está configurada para Smart Cart
+ * Versión: 1.9.15 - Alerta cuando store_config no está configurada para Smart Cart
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -199,13 +199,14 @@
 
                     // Guardar productos completos tal como vienen de MongoDB
                     this.config.products = await Promise.all((config.products || []).map(async p => {
-                        // Solo cargar la imagen, mantener TODO lo demás intacto
-                        const imageUrl = await this.loadProductImage(accountId, p.fid, p.tipo);
+                        // Para variantes, usar id_producto (padre) como key de imagen si existe
+                        const imageKey = p._esVariante && p.id_producto ? p.id_producto : p.fid;
+                        const imageUrl = p.imagen || await this.loadProductImage(accountId, imageKey, p.tipo);
 
                         // Agregar la imagen cargada al producto sin modificar nada más
                         return {
                             ...p,
-                            imageUrl: imageUrl // Agregar imagen cargada
+                            imageUrl: imageUrl
                         };
                     }));
 
@@ -1637,7 +1638,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.14</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.15</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
