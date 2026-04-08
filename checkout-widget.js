@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.16 - Fix variantes: enviar id_producto del padre en vez de fid de variante
+ * Versión: 1.9.17 - Fix variantes y simplificar metadata de Stripe
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1638,7 +1638,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.16</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.17</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2912,11 +2912,7 @@
                 const total = this.calculateTotal();
 
                 // 1. Crear Payment Intent
-                const productsSimplified = this.cart.map(item => ({
-                    nombre: item.nombre,
-                    cantidad: item.quantity,
-                    precio: item.precio
-                }));
+                const productsSimplified = `${this.cart.length} producto(s)`;
 
                 const response = await fetch(`${SACS_API_URL}/stripe/${this.config.accountId}/create-payment`, {
                     method: 'POST',
