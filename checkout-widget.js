@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.15 - Alerta cuando store_config no está configurada para Smart Cart
+ * Versión: 1.9.16 - Fix variantes: enviar id_producto del padre en vez de fid de variante
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1638,7 +1638,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.15</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.16</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -3121,7 +3121,7 @@
                     // Usar TODO el producto tal como viene de MongoDB
                     return {
                         // CAMPOS OBLIGATORIOS
-                        id_producto: item.fid,
+                        id_producto: item._esVariante && item.id_producto ? item.id_producto : item.fid,
                         costo: costoUnitario,
                         cantidad: cantidad,
                         tipo: item.tipo,
