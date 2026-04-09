@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.17 - Fix variantes y simplificar metadata de Stripe
+ * Versión: 1.9.18 - Campo teléfono requerido en checkout + mejora obtenerOCrearCliente backend
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -59,6 +59,7 @@
             this.customerInfo = {
                 correo: '',
                 nombre: '',
+                telefono: '',
                 direccion: '',
                 ciudad: '',
                 codigoPostal: ''
@@ -1638,7 +1639,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.17</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.18</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1776,6 +1777,10 @@
                         <div class="sacs-form-group">
                             <label class="sacs-form-label">Nombre Completo</label>
                             <input type="text" class="sacs-form-input" id="sacs-nombre" value="${this.customerInfo.nombre}" placeholder="Juan Pérez" required>
+                        </div>
+                        <div class="sacs-form-group">
+                            <label class="sacs-form-label">Teléfono</label>
+                            <input type="tel" class="sacs-form-input" id="sacs-telefono" value="${this.customerInfo.telefono}" placeholder="+52 55 1234 5678" pattern="[+]?[0-9\s\-\(\)]{7,20}" required>
                         </div>
                         <div class="sacs-form-group">
                             <label class="sacs-form-label">Dirección</label>
@@ -2226,13 +2231,20 @@
                         this.customerInfo = {
                             correo: document.getElementById('sacs-correo').value.trim(),
                             nombre: document.getElementById('sacs-nombre').value.trim(),
+                            telefono: document.getElementById('sacs-telefono').value.trim(),
                             direccion: document.getElementById('sacs-direccion').value.trim(),
                             ciudad: document.getElementById('sacs-ciudad').value.trim(),
                             codigoPostal: document.getElementById('sacs-cp').value.trim()
                         };
 
                         if (!this.validateCustomerInfo()) {
-                            this.showError('Por favor completa todos los campos');
+                            const telefono = this.customerInfo.telefono || '';
+                            const soloDigitos = telefono.replace(/\D/g, '');
+                            if (telefono && (!/^[+]?[0-9\s\-\(\)]{7,20}$/.test(telefono) || soloDigitos.length < 7)) {
+                                this.showError('Por favor ingresa un teléfono válido (mínimo 7 dígitos)');
+                            } else {
+                                this.showError('Por favor completa todos los campos');
+                            }
                             return;
                         }
 
@@ -3261,8 +3273,15 @@
         }
 
         validateCustomerInfo() {
+            // Validación de teléfono internacional: permite +, dígitos, espacios, guiones y paréntesis
+            // Debe contener al menos 7 dígitos (mínimo internacional E.164)
+            const telefono = this.customerInfo.telefono || '';
+            const soloDigitos = telefono.replace(/\D/g, '');
+            const telefonoValido = /^[+]?[0-9\s\-\(\)]{7,20}$/.test(telefono) && soloDigitos.length >= 7;
+
             return this.customerInfo.correo &&
                    this.customerInfo.nombre &&
+                   telefonoValido &&
                    this.customerInfo.direccion &&
                    this.customerInfo.ciudad &&
                    this.customerInfo.codigoPostal;
