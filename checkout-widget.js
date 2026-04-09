@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.18 - Campo teléfono requerido en checkout + mejora obtenerOCrearCliente backend
+ * Versión: 1.9.19 - Solo Correo, Nombre y Teléfono son obligatorios (dirección opcional)
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -1639,7 +1639,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.18</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.19</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1783,17 +1783,17 @@
                             <input type="tel" class="sacs-form-input" id="sacs-telefono" value="${this.customerInfo.telefono}" placeholder="+52 55 1234 5678" pattern="[+]?[0-9\s\-\(\)]{7,20}" required>
                         </div>
                         <div class="sacs-form-group">
-                            <label class="sacs-form-label">Dirección</label>
-                            <input type="text" class="sacs-form-input" id="sacs-direccion" value="${this.customerInfo.direccion}" placeholder="Calle Principal 123" required>
+                            <label class="sacs-form-label">Dirección <span style="opacity:0.5;font-weight:400;">(opcional)</span></label>
+                            <input type="text" class="sacs-form-input" id="sacs-direccion" value="${this.customerInfo.direccion}" placeholder="Calle Principal 123">
                         </div>
                         <div class="sacs-form-row">
                             <div class="sacs-form-group">
-                                <label class="sacs-form-label">Ciudad</label>
-                                <input type="text" class="sacs-form-input" id="sacs-ciudad" value="${this.customerInfo.ciudad}" placeholder="Ciudad de México" required>
+                                <label class="sacs-form-label">Ciudad <span style="opacity:0.5;font-weight:400;">(opcional)</span></label>
+                                <input type="text" class="sacs-form-input" id="sacs-ciudad" value="${this.customerInfo.ciudad}" placeholder="Ciudad de México">
                             </div>
                             <div class="sacs-form-group">
-                                <label class="sacs-form-label">Código Postal</label>
-                                <input type="text" class="sacs-form-input" id="sacs-cp" value="${this.customerInfo.codigoPostal}" placeholder="01000" required>
+                                <label class="sacs-form-label">Código Postal <span style="opacity:0.5;font-weight:400;">(opcional)</span></label>
+                                <input type="text" class="sacs-form-input" id="sacs-cp" value="${this.customerInfo.codigoPostal}" placeholder="01000">
                             </div>
                         </div>
                     </div>
@@ -2240,10 +2240,16 @@
                         if (!this.validateCustomerInfo()) {
                             const telefono = this.customerInfo.telefono || '';
                             const soloDigitos = telefono.replace(/\D/g, '');
-                            if (telefono && (!/^[+]?[0-9\s\-\(\)]{7,20}$/.test(telefono) || soloDigitos.length < 7)) {
+                            if (!this.customerInfo.correo) {
+                                this.showError('El correo electrónico es obligatorio');
+                            } else if (!this.customerInfo.nombre) {
+                                this.showError('El nombre completo es obligatorio');
+                            } else if (!telefono) {
+                                this.showError('El teléfono es obligatorio');
+                            } else if (!/^[+]?[0-9\s\-\(\)]{7,20}$/.test(telefono) || soloDigitos.length < 7) {
                                 this.showError('Por favor ingresa un teléfono válido (mínimo 7 dígitos)');
                             } else {
-                                this.showError('Por favor completa todos los campos');
+                                this.showError('Por favor completa los campos obligatorios');
                             }
                             return;
                         }
@@ -3279,12 +3285,10 @@
             const soloDigitos = telefono.replace(/\D/g, '');
             const telefonoValido = /^[+]?[0-9\s\-\(\)]{7,20}$/.test(telefono) && soloDigitos.length >= 7;
 
+            // Solo Correo, Nombre y Teléfono son obligatorios
             return this.customerInfo.correo &&
                    this.customerInfo.nombre &&
-                   telefonoValido &&
-                   this.customerInfo.direccion &&
-                   this.customerInfo.ciudad &&
-                   this.customerInfo.codigoPostal;
+                   telefonoValido;
         }
 
         /**
