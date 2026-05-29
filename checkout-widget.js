@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.19 - Solo Correo, Nombre y Teléfono son obligatorios (dirección opcional)
+ * Versión: 1.9.20 - Rotación de publishable key de test de Stripe
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -22,7 +22,7 @@
     // Stripe Platform Publishable Keys - Direct Charges con Stripe Connect
     // El modo (test/producción) se lee de la configuración de la cuenta en MongoDB
     const STRIPE_KEYS = {
-        test: 'pk_test_51SOJtVIDcKiybAAm47MUPAZ2rWptm9y0ffR0cg29PFORoml4pw1zOJjgQ3up5YvqabN0jWDW2ii2s1cNEfiFbhoV00xvSrkbuB',
+        test: 'pk_test_Ls9VQXrAnzRk6noFPCBi0Ch100WhEkuCSN',
         live: 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5'
     };
 
@@ -1639,7 +1639,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.19</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.20</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
