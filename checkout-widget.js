@@ -1,6 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
+ * Versión: 1.9.22 - Candado JWT: ecommerceconfig/contrato/imagen por /tienda/* seguros + firma persistida
  * Versión: 1.9.21 - Candado JWT: checkout y config por endpoints /tienda/* seguros (monto server-side)
  *
  * Nuevas opciones:
@@ -179,12 +180,13 @@
 
                 console.log('🔍 Buscando ecommerce config con filtro:', matchFilter);
 
-                // ⚠️ FLAG (candado JWT): `ecommerceconfig` NO está en la allowlist del gateway
-                // público (`sacs_api/modules/tiendaPublic.js` STOREFRONT_COLLECTIONS) → este
-                // `/rest/*` da 401 en estricto. Necesita un endpoint público dedicado o entrar
-                // a la allowlist (cambio de backend — lo enruta el coordinador). Mientras tanto,
-                // el widget puede recibir `products` por el embed (options.products) como respaldo.
-                const response = await fetch(`${API_URL}/rest/${accountId}/ecommerceconfig/aggregate`, {
+                // 🔒 Candado JWT (2026-07-28): `ecommerceconfig` ya está en la allowlist del
+                // gateway público (`sacs_api/modules/tiendaPublic.js` STOREFRONT_COLLECTIONS),
+                // así que se lee por `/tienda/:account/data/*` (el `/rest/*` daba 401 en estricto).
+                // El gateway BORRA `costo`/margen de los `products` embebidos (barrido recursivo);
+                // el widget solo usa nombre/precio/imagen, y el precio de venta lo recalcula el
+                // checkout SEGURO server-side desde el catálogo real.
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/data/ecommerceconfig/aggregate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -283,30 +285,22 @@
             const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
-                // ⚠️ FLAG (candado JWT): `plantillas_contratos` NO está en la allowlist del
-                // gateway público → este `/rest/*` da 401 en estricto. Necesita endpoint público
-                // dedicado o allowlist (cambio de backend — lo enruta el coordinador).
-                const response = await fetch(`${API_URL}/rest/${accountId}/plantillas_contratos/aggregate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pipeline: [
-                            {
-                                $match: {
-                                    account: accountId,
-                                    estado: 'activa',
-                                    'config.general.opcionesEnvio.enPedido': true
-                                }
-                            },
-                            { $limit: 1 }
-                        ]
-                    })
+                // 🔒 Candado JWT (2026-07-28): `plantillas_contratos` trae datos INTERNOS
+                // (segmentación por sucursal/caja, uid/usuario, borradores) → NO se sirve por
+                // el gateway genérico (el `/rest/*` daba 401 en estricto). El endpoint dedicado
+                // `GET /tienda/:account/checkout/contrato-config` devuelve SOLO la plantilla
+                // ACTIVA de pedidos, proyectada a lo que el widget necesita para renderizar y
+                // firmar el contrato (contenido, cláusulas, empresa impresa, campos, requiereFirma).
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/checkout/contrato-config`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
                 });
 
                 const result = await response.json();
 
-                if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-                    this.config.plantillaContratos = result.data[0];
+                // El endpoint devuelve `data` como OBJETO (la plantilla) o null.
+                if (result.success && result.data) {
+                    this.config.plantillaContratos = result.data;
                     console.log('✓ Plantilla de contratos cargada:', this.config.plantillaContratos.nombre);
                 } else {
                     console.log('ℹ️ No hay plantilla de contratos activa configurada para envío en pedidos');
@@ -326,23 +320,20 @@
         }
 
         async loadProductImage(accountId, productKey, productType) {
-            // ⚠️ FLAG (candado JWT): `/articulos/getImagen` es un endpoint dedicado que NO está
-            // en rutas-publicas → 401 en estricto. Es best-effort (cae a placeholder si falla).
-            // Alternativa limpia: leer imagen por el gateway (imagenarticulos/imagenvariantes,
-            // ya en la allowlist) o publicar getImagen. Cambio de backend → lo enruta el coordinador.
+            // 🔒 Candado JWT (2026-07-28): el viejo POST `/articulos/getImagen` (con `account`
+            // en el body) daba 401 en estricto. Se usa el endpoint público estructurado
+            // `GET /tienda/:account/articulo-imagen?key=...&tipo=...`, que reusa la MISMA lógica
+            // de selección de foto del catálogo (principal → orden → papá → grupo) y solo
+            // devuelve la URL (dato público). Best-effort: cae a placeholder si falla.
             const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
-                const response = await fetch(`${API_URL}/articulos/getImagen`, {
-                    method: 'POST',
+                const qs = `key=${encodeURIComponent(productKey)}&tipo=${encodeURIComponent(productType || 'Producto Simple')}`;
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/articulo-imagen?${qs}`, {
+                    method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        account: accountId,
-                        key: productKey,
-                        tipo: productType || 'Producto Simple'
-                    })
+                    }
                 });
 
                 if (!response.ok) {
@@ -1623,7 +1614,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.21</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.22</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -3401,9 +3392,16 @@
 
                 console.log('📧 Enviando correo de confirmación a:', this.customerInfo.correo);
 
-                // ⚠️ FLAG (candado JWT): `/email/sendgrid` no está en rutas-publicas → 401 en
-                // estricto. Es NO BLOQUEANTE (el pedido ya se creó). El correo de confirmación
-                // idealmente lo dispara el backend en crear-pedido (Notif.send). Lo enruta el coordinador.
+                // ⚠️ FLAG (candado JWT): `/email/sendgrid` sigue en 401 y así se DEJA a propósito.
+                // NO se puede hacer público: es un relay genérico "manda este HTML a este correo"
+                // → abrirlo sería un relay de spam con el SendGrid del comercio. Es NO BLOQUEANTE
+                // (el pedido ya se creó; el .catch() de arriba lo traga).
+                // ✅ El correo de confirmación YA lo dispara el backend: crearPedido →
+                //    _notifPedido('pedido_nuevo') (canal 'Online' NO está exceptuado) manda el
+                //    comprobante por el servicio unificado (services/notifications) si la cuenta
+                //    tiene el evento `pedido_nuevo` activo. Esta llamada del front es redundante
+                //    (y duplicaría el correo). PENDIENTE (decisión de notificaciones, NO técnica):
+                //    quitar este envío del front y confirmar la plantilla `pedido_nuevo` por cuenta.
                 const response = await fetch(`${API_URL}/email/sendgrid`, {
                     method: 'POST',
                     headers: {
