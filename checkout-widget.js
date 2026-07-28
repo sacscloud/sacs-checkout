@@ -1,6 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
+ * Versión: 1.9.23 - Candado JWT: comprobante/folios al comprador por /tienda/:account/checkout/recuperar-folios seguro (destinatario server-side)
  * Versión: 1.9.22 - Candado JWT: ecommerceconfig/contrato/imagen por /tienda/* seguros + firma persistida
  * Versión: 1.9.21 - Candado JWT: checkout y config por endpoints /tienda/* seguros (monto server-side)
  *
@@ -1614,7 +1615,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.22</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.23</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -3375,51 +3376,42 @@
          * Envía correo de confirmación del pedido al cliente
          */
         async sendOrderEmail(folio) {
+            // ✅ RESUELTO (candado JWT): el relay `/email/sendgrid` da 401 en estricto y
+            // abrirlo sería un relay de spam ("manda este HTML a este correo"). El envío
+            // del comprobante al comprador ahora pasa por el endpoint PÚBLICO y SEGURO
+            // `POST /tienda/:account/checkout/recuperar-folios`: el backend RESUELVE el
+            // destinatario (busca los pedidos de ESE correo y solo le manda a ESE mismo
+            // correo — nunca un `to` libre) y arma el HTML server-side. No bloqueante:
+            // el pedido ya se creó y el backend también dispara `pedido_nuevo`; el
+            // .catch() de arriba traga cualquier fallo.
             try {
-                const API_URL = 'https://api.sacscloud.com/v1';
-                const branding = this.config.branding || {};
-                const storeName = branding.storeName || this.config.ecommerceConfig?.nombreTienda || 'Tienda Online';
-                const logoUrl = branding.logo || null;
-                const coverUrl = branding.coverImage || null;
+                const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+                const correo = this.customerInfo && this.customerInfo.correo;
+                if (!correo) return { success: false, error: 'sin correo del comprador' };
 
-                const htmlContent = this.generateOrderEmailHTML(folio, storeName, logoUrl, coverUrl);
+                console.log('📧 Solicitando envío de folios al comprador:', correo);
 
-                const emailData = {
-                    to: this.customerInfo.correo,
-                    subject: `Confirmación de pedido #${folio} - ${storeName}`,
-                    htmlContent: htmlContent
-                };
-
-                console.log('📧 Enviando correo de confirmación a:', this.customerInfo.correo);
-
-                // ⚠️ FLAG (candado JWT): `/email/sendgrid` sigue en 401 y así se DEJA a propósito.
-                // NO se puede hacer público: es un relay genérico "manda este HTML a este correo"
-                // → abrirlo sería un relay de spam con el SendGrid del comercio. Es NO BLOQUEANTE
-                // (el pedido ya se creó; el .catch() de arriba lo traga).
-                // ✅ El correo de confirmación YA lo dispara el backend: crearPedido →
-                //    _notifPedido('pedido_nuevo') (canal 'Online' NO está exceptuado) manda el
-                //    comprobante por el servicio unificado (services/notifications) si la cuenta
-                //    tiene el evento `pedido_nuevo` activo. Esta llamada del front es redundante
-                //    (y duplicaría el correo). PENDIENTE (decisión de notificaciones, NO técnica):
-                //    quitar este envío del front y confirmar la plantilla `pedido_nuevo` por cuenta.
-                const response = await fetch(`${API_URL}/email/sendgrid`, {
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(this.config.accountId)}/checkout/recuperar-folios`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(emailData)
+                    // El destinatario NO se dicta aquí: el backend lo deriva de `email`
+                    // (busca sus pedidos). `folio` va solo como referencia/telemetría.
+                    body: JSON.stringify({ email: correo, folio: folio })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                const result = await response.json().catch(() => ({}));
+
+                if (!response.ok || result.success === false) {
+                    throw new Error(`Error ${response.status}: ${(result && result.msg) || response.statusText}`);
                 }
 
-                const result = await response.json();
-                console.log('✅ Correo de confirmación enviado:', result);
+                console.log('✅ Folios enviados al comprador por correo:', result);
                 return result;
 
             } catch (error) {
-                console.error('❌ Error enviando correo de confirmación:', error);
+                console.error('❌ Error enviando folios al comprador:', error);
                 // No lanzar error para no afectar el flujo del pedido
                 return { success: false, error: error.message };
             }
