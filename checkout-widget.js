@@ -1,7 +1,7 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.9.20 - Rotación de publishable key de test de Stripe
+ * Versión: 1.9.21 - Candado JWT: checkout y config por endpoints /tienda/* seguros (monto server-side)
  *
  * Nuevas opciones:
  * - renderButton: false → No crea botón, permite usar botón nativo del CMS
@@ -111,11 +111,8 @@
 
             // PASO 1: Cargar configuraciones desde MongoDB (si hay accountId)
             if (options.accountId) {
-                console.log('📡 Cargando Stripe config...');
-                await this.loadStripeConfig(options.accountId);
-
-                console.log('📡 Cargando Account Defaults (almacén, sucursal, etc.)...');
-                await this.loadAccountDefaults(options.accountId);
+                console.log('📡 Cargando config de tienda (Stripe + defaults + branding) por endpoint seguro...');
+                await this.loadStoreConfig(options.accountId);
 
                 console.log('📡 Cargando eCommerce config (productos, colores, etc.)...');
                 await this.loadEcommerceConfig(options.accountId, options.configId);
@@ -182,6 +179,11 @@
 
                 console.log('🔍 Buscando ecommerce config con filtro:', matchFilter);
 
+                // ⚠️ FLAG (candado JWT): `ecommerceconfig` NO está en la allowlist del gateway
+                // público (`sacs_api/modules/tiendaPublic.js` STOREFRONT_COLLECTIONS) → este
+                // `/rest/*` da 401 en estricto. Necesita un endpoint público dedicado o entrar
+                // a la allowlist (cambio de backend — lo enruta el coordinador). Mientras tanto,
+                // el widget puede recibir `products` por el embed (options.products) como respaldo.
                 const response = await fetch(`${API_URL}/rest/${accountId}/ecommerceconfig/aggregate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -233,72 +235,47 @@
             }
         }
 
-        async loadStripeConfig(accountId) {
+        async loadStoreConfig(accountId) {
+            // 🔒 Candado JWT (2026-07-28): `stripe_config` guarda secretos y `store_config`
+            // vive en una base GLOBAL; ninguno se sirve ya por `/rest/*` (401 en estricto).
+            // El endpoint PÚBLICO `GET /tienda/:account/store-config` devuelve, en UNA sola
+            // llamada: el estado público de Stripe (connected/accountId/livemode, SIN el
+            // secret `sk_`), los `defaults` (almacén/sucursal/tipoCliente) y el `branding`.
+            // Reemplaza a los viejos loadStripeConfig + loadAccountDefaults.
             const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
-                const response = await fetch(`${API_URL}/rest/${accountId}/stripe_config/aggregate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pipeline: [
-                            { $match: { _id: 'stripe' } },
-                            { $limit: 1 }
-                        ]
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-                    const stripeConfig = result.data[0];
-                    this.config.stripeTestMode = stripeConfig.stripeTestMode || false;
-
-                    // Usar el accountId según el modo (nuevos campos separados)
-                    // Fallback al campo viejo stripeAccountId para compatibilidad
-                    this.config.stripeAccountId = this.config.stripeTestMode
-                        ? (stripeConfig.stripeAccountIdTest || stripeConfig.stripeAccountId)
-                        : (stripeConfig.stripeAccountIdLive || stripeConfig.stripeAccountId);
-
-                    console.log('✓ Stripe Account ID:', this.config.stripeAccountId);
-                    console.log('✓ Stripe Test Mode:', this.config.stripeTestMode);
-                } else {
-                    console.error('No se encontró configuración de Stripe para esta cuenta');
-                }
-            } catch (error) {
-                console.error('Error cargando configuración de Stripe:', error);
-            }
-        }
-
-        async loadAccountDefaults(accountId) {
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
-
-            try {
-                // Los defaults están en store_config de admin con filtro por account
-                const response = await fetch(`${API_URL}/rest/admin/store_config?limit=1&account=${accountId}&isActive=true`, {
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/store-config`, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
 
                 const result = await response.json();
+                const data = (result && result.success && result.data) ? result.data : null;
 
-                if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-                    const config = result.data[0];
-
-                    if (config && config.defaults) {
-                        this.config.accountDefaults = config.defaults;
-                        this.config.branding = config.branding || {};
-                        console.log('✓ Account Defaults cargados:', config.defaults);
-                        console.log('✓ Branding cargado:', config.branding);
-                    } else {
-                        throw new Error('No se encontró configuración de defaults para esta cuenta');
-                    }
-                } else {
-                    throw new Error('Error al obtener store_config');
+                if (!data) {
+                    console.error('No se encontró configuración de tienda para esta cuenta');
+                    return;
                 }
+
+                // --- Stripe: estado público (sin secretos). livemode=true → producción. ---
+                const stripe = data.stripe || {};
+                this.config.stripeTestMode = stripe.livemode !== true;
+                this.config.stripeAccountId = stripe.accountId || null;
+                console.log('✓ Stripe Account ID:', this.config.stripeAccountId);
+                console.log('✓ Stripe Test Mode:', this.config.stripeTestMode);
+
+                // --- Defaults (almacén / sucursal / tipoCliente) + branding ---
+                if (data.defaults) {
+                    this.config.accountDefaults = data.defaults;
+                    console.log('✓ Account Defaults cargados:', data.defaults);
+                } else {
+                    console.warn('⚠️ store-config sin `defaults`; el checkout puede fallar al crear el pedido');
+                }
+                this.config.branding = data.branding || {};
+                console.log('✓ Branding cargado:', this.config.branding);
             } catch (error) {
-                console.error('Error cargando account defaults:', error);
-                throw error;
+                console.error('Error cargando configuración de tienda:', error);
             }
         }
 
@@ -306,6 +283,9 @@
             const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
+                // ⚠️ FLAG (candado JWT): `plantillas_contratos` NO está en la allowlist del
+                // gateway público → este `/rest/*` da 401 en estricto. Necesita endpoint público
+                // dedicado o allowlist (cambio de backend — lo enruta el coordinador).
                 const response = await fetch(`${API_URL}/rest/${accountId}/plantillas_contratos/aggregate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -346,6 +326,10 @@
         }
 
         async loadProductImage(accountId, productKey, productType) {
+            // ⚠️ FLAG (candado JWT): `/articulos/getImagen` es un endpoint dedicado que NO está
+            // en rutas-publicas → 401 en estricto. Es best-effort (cae a placeholder si falla).
+            // Alternativa limpia: leer imagen por el gateway (imagenarticulos/imagenvariantes,
+            // ya en la allowlist) o publicar getImagen. Cambio de backend → lo enruta el coordinador.
             const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
@@ -1639,7 +1623,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.20</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.21</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2927,30 +2911,35 @@
             errorContainer.innerHTML = '';
 
             try {
-                const total = this.calculateTotal();
+                let total = this.calculateTotal();
 
-                // 1. Crear Payment Intent
-                const productsSimplified = `${this.cart.length} producto(s)`;
+                // 1. Crear el Payment Intent por el CHECKOUT SEGURO de la tienda.
+                //    🔒 El monto YA NO lo decide el front: se manda el BORRADOR del pedido
+                //    (header + details) y el backend RECALCULA el total desde el catálogo real
+                //    y crea el PaymentIntent con ESE monto. Reemplaza al viejo
+                //    `/stripe/:account/create-payment` (401 en estricto + confiaba en `amount`).
+                const borrador = this.buildPedidoPayload(null, 'pending', total, null);
 
-                const response = await fetch(`${SACS_API_URL}/stripe/${this.config.accountId}/create-payment`, {
+                const response = await fetch(`${SACS_API_URL}/tienda/${encodeURIComponent(this.config.accountId)}/checkout/crear-pago`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        amount: Math.round(total * 100),
-                        currency: 'mxn',
-                        description: 'Compra en tienda online',
-                        metadata: {
-                            customer_name: this.customerInfo.nombre,
-                            customer_email: this.customerInfo.correo,
-                            products: JSON.stringify(productsSimplified)
-                        }
-                    })
+                    body: JSON.stringify(borrador)
                 });
 
-                const paymentData = await response.json();
+                const paymentJson = await response.json().catch(() => ({}));
 
-                if (!response.ok || !paymentData.success) {
-                    throw new Error(paymentData.error || 'Error al crear el pago');
+                if (!response.ok || paymentJson.success === false) {
+                    throw new Error(paymentJson.msg || paymentJson.error || 'Error al iniciar el pago');
+                }
+
+                // El endpoint seguro devuelve { success, data: { clientSecret, paymentIntentId, amount } }.
+                const paymentData = paymentJson.data || paymentJson;
+                if (!paymentData.clientSecret) {
+                    throw new Error(paymentJson.msg || 'No se recibió el clientSecret del pago');
+                }
+                // Usar el TOTAL recalculado server-side para el cobro/confirmación.
+                if (typeof paymentData.amount === 'number' && paymentData.amount > 0) {
+                    total = paymentData.amount;
                 }
 
                 // 2. Confirmar pago con Stripe
@@ -3032,10 +3021,12 @@
             }
         }
 
-        async createOrder(paymentIntentId, paymentStatus, total, firmaBase64 = null) {
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
-
-            try {
+        // Arma el BORRADOR del pedido { account, header, details, cobros } que consumen los
+        // endpoints seguros crear-pago (para recalcular el monto) y crear-pedido (crea la nota).
+        // El backend PISA todo lo monetario (precios/impuestos/total) desde el catálogo real;
+        // estos importes viajan solo como respaldo/UX. NO hace la petición HTTP.
+        buildPedidoPayload(paymentIntentId, paymentStatus, total, firmaBase64 = null) {
+            {
                 const now = Date.now();
                 const ahora = new Date();
                 // Usar zona horaria de México para fecha y hora
@@ -3232,7 +3223,31 @@
                     console.log('📦 Creando pedido en SACS (sin firma):', pedidoObject);
                 }
 
-                const response = await fetch(`${API_URL}/pedidos/createPedido`, {
+                // Guardar el borrador para el reintento idempotente (verifyOrderExists).
+                this._lastPedidoPayload = pedidoObject;
+                return pedidoObject;
+            }
+        }
+
+        // Crea la nota mediante el CHECKOUT SEGURO: POST /tienda/:account/checkout/crear-pedido.
+        // El backend RE-verifica el pago contra Stripe (status succeeded + monto) ANTES de crear
+        // la nota, RECALCULA todo server-side y crea/actualiza al cliente por correo. Es
+        // idempotente por PaymentIntent. Reemplaza al viejo `/pedidos/createPedido` (401 en
+        // estricto + confiaba en los importes del front).
+        async createOrder(paymentIntentId, paymentStatus, total, firmaBase64 = null) {
+            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+
+            try {
+                const pedidoObject = this.buildPedidoPayload(paymentIntentId, paymentStatus, total, firmaBase64);
+                // El backend deduce el proveedor 'stripe' del header.stripe_payment_intent_id;
+                // se manda también a nivel raíz por claridad/robustez.
+                pedidoObject.paymentIntentId = paymentIntentId;
+
+                console.log(firmaBase64
+                    ? '📦 Creando pedido (checkout seguro) CON FIRMA'
+                    : '📦 Creando pedido (checkout seguro), sin firma');
+
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(this.config.accountId)}/checkout/crear-pedido`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -3240,32 +3255,28 @@
                     body: JSON.stringify(pedidoObject)
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                const result = await response.json().catch(() => ({}));
+
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.msg || result.message || `Error ${response.status}: ${response.statusText}`);
                 }
 
-                const result = await response.json();
+                // crear-pedido devuelve { success, data: { folio, fid, total } } (o idempotente).
+                const data = result.data || result;
+                const folio = data.folio;
+                if (folio) {
+                    console.log('✓ Pedido creado exitosamente:', data);
+                    this.orderId = `PED-${folio}`;
 
-                if (result.success) {
-                    console.log('✓ Pedido creado exitosamente:', result);
-                    // Actualizar el orderId con el folio real del pedido
-                    // El folio viene en result.data.folio (estructura del API)
-                    const folio = result.data?.folio || result.folio;
-                    if (folio) {
-                        this.orderId = `PED-${folio}`;
+                    // 📧 Enviar correo de confirmación al cliente (no bloqueante)
+                    this.sendOrderEmail(folio).catch(err => {
+                        console.warn('⚠️ No se pudo enviar correo de confirmación:', err);
+                    });
 
-                        // 📧 Enviar correo de confirmación al cliente (no bloqueante)
-                        this.sendOrderEmail(folio).catch(err => {
-                            console.warn('⚠️ No se pudo enviar correo de confirmación:', err);
-                        });
-
-                        return { success: true, folio: folio };
-                    }
-                } else {
-                    console.error('Error al crear pedido:', result.message || result.msg);
-                    // Retornar el error para que el flujo superior lo maneje
-                    throw new Error(result.message || result.msg || 'Error desconocido al crear el pedido');
+                    return { success: true, folio: folio };
                 }
+                // Éxito sin folio explícito (respuesta idempotente parcial): ok best-effort.
+                return { success: true, folio: data.fid || null };
 
             } catch (error) {
                 console.error('Error creando pedido:', error);
@@ -3296,36 +3307,40 @@
          * Útil cuando Safari/iOS corta la conexión pero el pedido sí se creó
          */
         async verifyOrderExists(paymentIntentId) {
-            const API_URL = 'https://api.sacscloud.com/v1';
+            // 🔒 Candado JWT: `/pedidos/get` da 401 en estricto. El checkout seguro
+            // `crear-pedido` es IDEMPOTENTE por PaymentIntent: si el pedido ya se creó
+            // devuelve el mismo folio; si el pago se confirmó pero el pedido nunca se creó
+            // (típico corte de Safari/iOS), lo crea ahora RE-verificando el pago con Stripe.
+            // Reintentamos con el borrador guardado.
+            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
-                console.log('🔍 Verificando si el pedido existe para:', paymentIntentId);
+                if (!this._lastPedidoPayload) {
+                    console.warn('⚠️ Sin borrador guardado para reintentar la creación del pedido');
+                    return { exists: false };
+                }
+                console.log('🔁 Reintentando crear-pedido (idempotente) para:', paymentIntentId);
 
-                const response = await fetch(`${API_URL}/pedidos/get`, {
+                const pedidoObject = { ...this._lastPedidoPayload, paymentIntentId: paymentIntentId };
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(this.config.accountId)}/checkout/crear-pedido`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        account: this.config.accountId,
-                        aggregate: [
-                            { $match: { stripe_payment_intent_id: paymentIntentId } },
-                            { $limit: 1 }
-                        ]
-                    })
+                    body: JSON.stringify(pedidoObject)
                 });
 
-                const result = await response.json();
+                const result = await response.json().catch(() => ({}));
+                const data = (result && (result.data || result)) || {};
 
-                if (result.success && result.data?.items?.length > 0) {
-                    const pedido = result.data.items[0];
-                    console.log('✅ Pedido encontrado:', pedido.folio);
-                    return { exists: true, folio: pedido.folio };
+                if (response.ok && result.success !== false && data.folio) {
+                    console.log('✅ Pedido confirmado por reintento idempotente:', data.folio);
+                    return { exists: true, folio: data.folio };
                 }
 
-                console.log('❌ Pedido no encontrado');
+                console.log('❌ El pedido no pudo confirmarse en el reintento');
                 return { exists: false };
 
             } catch (error) {
-                console.error('Error verificando pedido:', error);
+                console.error('Error verificando/reintentando pedido:', error);
                 return { exists: false };
             }
         }
@@ -3336,10 +3351,12 @@
          * Obtiene el logo de la sucursal desde MongoDB
          */
         async getSucursalLogo(accountId, sucursalFid) {
-            const API_URL = 'https://api.sacscloud.com/v1';
+            // 🔒 Candado JWT: `sucursales` es colección de vitrina → se lee por el gateway
+            // público `/tienda/:account/data/sucursales/aggregate` (el `/rest/*` da 401).
+            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
-                const response = await fetch(`${API_URL}/rest/${accountId}/sucursales/aggregate`, {
+                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/data/sucursales/aggregate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3384,6 +3401,9 @@
 
                 console.log('📧 Enviando correo de confirmación a:', this.customerInfo.correo);
 
+                // ⚠️ FLAG (candado JWT): `/email/sendgrid` no está en rutas-publicas → 401 en
+                // estricto. Es NO BLOQUEANTE (el pedido ya se creó). El correo de confirmación
+                // idealmente lo dispara el backend en crear-pedido (Notif.send). Lo enruta el coordinador.
                 const response = await fetch(`${API_URL}/email/sendgrid`, {
                     method: 'POST',
                     headers: {
