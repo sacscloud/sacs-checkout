@@ -1,6 +1,18 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
+ * Versión: 1.10.2 - Combos con hueco sobre el candado JWT + carrito no falla en silencio
+ *   · Reimplementado sobre la v1.9.23 (endpoints /tienda/* seguros): la rama
+ *     v1.10.x anterior seguía pidiendo /rest/* y hoy daría 401 en toda la tienda.
+ *   · Si la configuración no carga, ya NO se pinta un botón que abre un carrito
+ *     vacío de $0.00: se muestra el motivo y no se puede continuar.
+ * Versión: 1.10.0 - Kits/combos con huecos de variante seleccionable
+ *   · Productos tipo combo (con insumos es_slot_seleccionable) piden
+ *     personalización antes del pago: selector por hueco con opciones,
+ *     stock y contador N/N (mismo modelo que POS/listas escolares).
+ *   · La línea del pedido viaja con kit_slots → el backend valida la
+ *     selección y descuenta el inventario de cada componente elegido.
+ *   · Guard en el carrito: no se puede continuar con un combo sin resolver.
  * Versión: 1.9.23 - Candado JWT: comprobante/folios al comprador por /tienda/:account/checkout/recuperar-folios seguro (destinatario server-side)
  * Versión: 1.9.22 - Candado JWT: ecommerceconfig/contrato/imagen por /tienda/* seguros + firma persistida
  * Versión: 1.9.21 - Candado JWT: checkout y config por endpoints /tienda/* seguros (monto server-side)
@@ -148,11 +160,19 @@
             console.log('🎨 Estilos drawer:', this.config.drawerStyles);
             console.log('🎨 Estilos botón checkout:', this.config.checkoutButtonStyles);
 
+            // 🧩 KITS/COMBOS con huecos de variante (v1.10): hidratar DESPUÉS del
+            // override de options.products, sobre el array FINAL (Mongo o embed).
+            if (options.accountId) {
+                await this.hidratarSlotsKits(options.accountId);
+            }
+
             // Inicializar carrito con productos preconfigurados
             // Usar cantidadDefault del producto si está configurada, sino 1
+            // _kitSlots: selección de huecos del kit (null = pendiente de personalizar)
             this.cart = this.config.products.map(product => ({
                 ...product,
-                quantity: product.cantidadDefault || 1
+                quantity: product.cantidadDefault || 1,
+                _kitSlots: null
             }));
 
             // Cargar Stripe.js (esperar a que termine)
@@ -200,7 +220,22 @@
 
                 const result = await response.json();
 
-                if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                // ⚠️ La configuración NO cargó (configId equivocado, cuenta mal escrita,
+                // API caída o la tienda apagada). Antes esto solo se anotaba en la consola
+                // y el widget seguía adelante: pintaba el botón y abría un carrito VACÍO
+                // con Total $0.00 y el "Continuar" habilitado. Para el comercio eso es una
+                // venta fantasma esperando pasar, y para soporte es un "no aparece nada"
+                // imposible de diagnosticar. Se marca el fallo y el botón lo comunica.
+                if (!(result.success && Array.isArray(result.data) && result.data.length > 0)) {
+                    this._configError = configId
+                        ? 'No se encontró la configuración "' + configId + '" en la cuenta "' + accountId + '".'
+                        : 'No se encontró ninguna configuración de carrito para la cuenta "' + accountId + '".';
+                    console.error('❌ SACS Checkout: ' + this._configError +
+                        ' Revisa el accountId y el configId del código embebido.');
+                    return;
+                }
+
+                {
                     const config = result.data[0];
 
                     // Guardar productos completos tal como vienen de MongoDB
@@ -215,6 +250,10 @@
                             imageUrl: imageUrl
                         };
                     }));
+
+                    // 🧩 KITS/COMBOS: la hidratación de huecos se hace en init() DESPUÉS
+                    // del override options.products (si no, un embed con products propios
+                    // perdería los slots — el array se reemplaza completo).
 
                     // Cargar estilos del drawer
                     if (config.drawerStyles) {
@@ -234,7 +273,10 @@
                     console.log('✓ Configuración de eCommerce cargada desde MongoDB');
                 }
             } catch (error) {
-                console.error('Error cargando configuración de eCommerce:', error);
+                // Misma regla que arriba: si no hay configuración, NO se abre un carrito
+                // vacío como si todo estuviera bien.
+                this._configError = 'No se pudo cargar la configuración del carrito.';
+                console.error('❌ SACS Checkout: error cargando configuración de eCommerce:', error);
             }
         }
 
@@ -364,6 +406,21 @@
             const container = document.getElementById(this.containerId);
             if (!container) {
                 console.warn(`⚠️ Contenedor no encontrado: ${this.containerId}`);
+                return;
+            }
+
+            // Sin configuración NO se ofrece un botón de compra: abriría un carrito
+            // vacío de $0.00 con el "Continuar" habilitado. Se deja un aviso visible
+            // para el dueño del sitio (el comprador no ve un botón que no vende) y el
+            // detalle exacto en la consola.
+            if (this._configError) {
+                const aviso = document.createElement('div');
+                aviso.setAttribute('data-sacs-checkout-error', '1');
+                aviso.style.cssText = 'padding:12px 14px;border:1px dashed #F59E0B;background:#FFFBEB;' +
+                    'color:#92400E;border-radius:8px;font-family:inherit;font-size:13px;line-height:1.5;max-width:520px;';
+                aviso.textContent = '⚠️ Carrito no disponible: ' + this._configError +
+                    ' Revisa el código embebido en esta página.';
+                container.appendChild(aviso);
                 return;
             }
 
@@ -652,6 +709,54 @@
                     justify-content: space-between;
                     margin-top: auto;
                 }
+
+                /* 🧩 Kits/combos con huecos de variante */
+                .sacs-kit-block {
+                    margin-top: 10px;
+                    padding: 10px 12px;
+                    border-radius: 10px;
+                    font-size: 13px;
+                }
+                .sacs-kit-pendiente { background: #FEF3C7; border: 1px solid #FDE68A; }
+                .sacs-kit-ok { background: #ECFDF3; border: 1px solid #A7F3D0; }
+                .sacs-kit-req {
+                    display: inline-block; font-size: 10px; font-weight: 700;
+                    letter-spacing: .04em; text-transform: uppercase;
+                    background: #D97706; color: #fff; border-radius: 999px;
+                    padding: 2px 8px; margin-bottom: 6px;
+                }
+                .sacs-kit-txt { margin: 0 0 8px; color: #78350F; }
+                .sacs-kit-btn {
+                    border: none; border-radius: 8px; padding: 8px 14px;
+                    font-size: 13px; font-weight: 600; cursor: pointer;
+                    background: #111827; color: #fff;
+                }
+                .sacs-kit-btn-sec { background: #fff; color: #065F46; border: 1px solid #A7F3D0; }
+                .sacs-kit-resumen { margin: 0 0 8px; padding-left: 16px; color: #065F46; }
+                .sacs-kit-resumen li { margin-bottom: 2px; }
+                .sacs-slot-grupo {
+                    background: #F9FAFB; border: 1px solid #E5E7EB;
+                    border-radius: 12px; padding: 14px; margin-bottom: 14px;
+                }
+                .sacs-slot-head { display: flex; align-items: center; justify-content: space-between; }
+                .sacs-slot-titulo { margin: 0; font-size: 15px; font-weight: 700; }
+                .sacs-slot-prog {
+                    font-size: 12px; font-weight: 700; border-radius: 999px;
+                    padding: 3px 10px; background: #FEF3C7; color: #92400E;
+                }
+                .sacs-slot-prog.ok { background: #D1FAE5; color: #065F46; }
+                .sacs-slot-hint { margin: 4px 0 10px; font-size: 12px; color: #6B7280; }
+                .sacs-slot-op {
+                    display: flex; align-items: center; justify-content: space-between;
+                    gap: 10px; padding: 8px 10px; border-radius: 10px;
+                    border: 1px solid #E5E7EB; background: #fff; margin-bottom: 8px;
+                }
+                .sacs-slot-op.on { border-color: #111827; box-shadow: 0 0 0 1px #111827; }
+                .sacs-slot-op.out { opacity: .5; }
+                .sacs-slot-op-info { display: flex; flex-direction: column; min-width: 0; }
+                .sacs-slot-op-nombre { font-size: 13px; font-weight: 600; }
+                .sacs-slot-op-stock { font-size: 11px; color: #6B7280; }
+                .sacs-qty-btn[disabled] { opacity: .35; cursor: not-allowed; }
 
                 .sacs-quantity-control {
                     display: flex;
@@ -1542,7 +1647,28 @@
 
             this.isOpen = true;
             this.currentStep = 1;
+            this._slotPicker = null;   // nunca reabrir con un selector colgado de la sesión anterior
             this.render();
+
+            // 🧩 Reintento de huecos: si un kit potencial quedó sin verificar
+            // (falló el fetch en init), reintentar ahora y sincronizar el carrito.
+            // Sin esto, un 500 transitorio degrada el combo a producto simple
+            // toda la sesión y el pedido caería a kit_slots_pendiente.
+            const sinVerificar = (this.config.products || []).some(p =>
+                (p.tiene_hueco_variante === true || p.tipo === 'Producto Compuesto') && !p._slotsChecked);
+            if (sinVerificar && this.config.accountId) {
+                this.hidratarSlotsKits(this.config.accountId).then(() => {
+                    (this.config.products || []).forEach(p => {
+                        const it = this.cart.find(c => c.fid === p.fid);
+                        if (it && p._slotsChecked) {
+                            it._slotsChecked = true;
+                            if (p._slotsDef) it._slotsDef = p._slotsDef;
+                            if (p._slotsPricing) it._slotsPricing = p._slotsPricing;
+                        }
+                    });
+                    if (this.isOpen && this.currentStep === 1 && !this._slotPicker) this.render();
+                }).catch(() => {});
+            }
 
             // Abrir con animación
             requestAnimationFrame(() => {
@@ -1615,7 +1741,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.9.23</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.2</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1676,6 +1802,11 @@
         renderBody() {
             const requiereFirma = this.requiereFirma();
 
+            // 🧩 Selector de huecos del kit abierto: sustituye al cuerpo actual
+            if (this._slotPicker) {
+                return this.renderSlotPicker();
+            }
+
             switch (this.currentStep) {
                 case 1:
                     return this.renderCart();
@@ -1720,9 +1851,254 @@
                                     </div>
                                     <span class="sacs-item-price">$${(parseFloat(item.precio) * item.quantity).toFixed(2)}</span>
                                 </div>
+                                ${this._kitBloqueHTML(item, index)}
                             </div>
                         </div>
                     `).join('')}
+                </div>
+            `;
+        }
+
+        // ==================== 🧩 KITS/COMBOS: huecos de variante ====================
+
+        // Pide los huecos FRESCOS de cada kit potencial a /v1/kits/slots (opciones,
+        // existencias y whitelist actuales — no el snapshot congelado del config).
+        // Pasa el ALMACÉN del widget para que la existencia sea la de la bodega que
+        // realmente descuenta el pedido, no la suma de todas.
+        // p._slotsChecked distingue "verificado sin huecos" de "fetch falló" (para
+        // reintentar en open()).
+        async hidratarSlotsKits(accountId) {
+            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const almacen = (this.config.accountDefaults && this.config.accountDefaults.almacen && this.config.accountDefaults.almacen.key)
+                || (this.config.defaultConfig && this.config.defaultConfig.almacen) || null;
+            await Promise.all((this.config.products || []).map(async p => {
+                const esKitPotencial = p.tiene_hueco_variante === true || p.tipo === 'Producto Compuesto';
+                if (!esKitPotencial || p._slotsChecked) return;
+                try {
+                    const body = { account: accountId, kit_id: p.fid };
+                    if (almacen) body.almacen = almacen;
+                    const rs = await fetch(`${API_URL}/kits/slots`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const js = await rs.json();
+                    const data = (js && js.data) || {};
+                    const slots = Array.isArray(data.slots) ? data.slots : [];
+                    p._slotsChecked = true;
+                    if (slots.length) {
+                        p._slotsDef = slots;   // [{insumo_fid,label,padre_fid,cantidad,distintas,opciones:[...]}]
+                        if (data.pricing) p._slotsPricing = data.pricing; // {suma_insumos, precio_base}
+                        console.log(`🧩 Kit con ${slots.length} hueco(s) de variante:`, p.nombre);
+                    }
+                } catch (e) {
+                    // Sin _slotsChecked: open() reintenta. NUNCA dejar pasar un kit
+                    // como simple en silencio por un fallo transitorio de red.
+                    console.error('Error cargando huecos del kit', p.nombre, e);
+                }
+            }));
+        }
+
+        // Bloque bajo el item del carrito: pide personalizar o resume la selección.
+        _kitBloqueHTML(item, index) {
+            if (!item._slotsDef || !item._slotsDef.length || item.quantity <= 0) return '';
+            // Sin stock suficiente para completar el hueco: avisar en vez de mandar
+            // al comprador a un selector imposible de confirmar.
+            if (!this._kitResuelto(item) && this._slotIncompletable(item)) {
+                return `
+                    <div class="sacs-kit-block sacs-kit-pendiente">
+                        <p class="sacs-kit-txt">😔 Este combo está agotado por el momento (sin opciones suficientes disponibles). Quítalo para continuar con tu compra.</p>
+                        <button class="sacs-kit-btn" onclick="sacsCheckout.updateQuantity(${index}, 0)">Quitar del carrito</button>
+                    </div>
+                `;
+            }
+            if (!this._kitResuelto(item)) {
+                return `
+                    <div class="sacs-kit-block sacs-kit-pendiente">
+                        <span class="sacs-kit-req">Requerido</span>
+                        <p class="sacs-kit-txt">Este combo se personaliza: elige ${item._slotsDef.map(s => `${s.cantidad} × ${s.label || s.padre_nombre}`).join(', ')}.</p>
+                        <button class="sacs-kit-btn" onclick="sacsCheckout.openSlotPicker(${index})">Personalizar combo</button>
+                    </div>
+                `;
+            }
+            const resumen = item._slotsDef.map(s => {
+                const sel = item._kitSlots[s.insumo_fid];
+                const partes = (sel && sel.elegidas || []).map(e => `${e.cantidad}× ${e.atributos || e.nombre}`);
+                return `<li><b>${s.label || s.padre_nombre}:</b> ${partes.join(' · ')}</li>`;
+            }).join('');
+            return `
+                <div class="sacs-kit-block sacs-kit-ok">
+                    <ul class="sacs-kit-resumen">${resumen}</ul>
+                    <button class="sacs-kit-btn sacs-kit-btn-sec" onclick="sacsCheckout.openSlotPicker(${index})">Cambiar selección</button>
+                </div>
+            `;
+        }
+
+        _kitResuelto(item) {
+            if (!item._slotsDef || !item._slotsDef.length) return true;
+            if (!item._kitSlots) return false;
+            return item._slotsDef.every(s => {
+                const sel = item._kitSlots[s.insumo_fid];
+                if (!sel || !Array.isArray(sel.elegidas)) return false;
+                const total = sel.elegidas.reduce((t, e) => t + (Number(e.cantidad) || 0), 0);
+                return total === Number(s.cantidad);
+            });
+        }
+
+        openSlotPicker(index) {
+            const item = this.cart[index];
+            if (!item || !item._slotsDef) return;
+            // seleccion[insumo_fid][variante_fid] = cantidad (precargada si ya eligió)
+            const seleccion = {};
+            item._slotsDef.forEach(s => {
+                seleccion[s.insumo_fid] = {};
+                const prev = item._kitSlots && item._kitSlots[s.insumo_fid];
+                (prev && prev.elegidas || []).forEach(e => { seleccion[s.insumo_fid][e.variante] = Number(e.cantidad) || 0; });
+            });
+            this._slotPicker = { index, seleccion };
+            this.render();
+        }
+
+        cancelSlotPicker() {
+            this._slotPicker = null;
+            this.render();
+        }
+
+        slotPickQty(insumoFid, varianteFid, delta) {
+            const sp = this._slotPicker;
+            if (!sp) return;
+            const item = this.cart[sp.index];
+            const slot = item._slotsDef.find(s => s.insumo_fid === insumoFid);
+            if (!slot) return;
+            const sel = sp.seleccion[insumoFid];
+            const actual = Number(sel[varianteFid]) || 0;
+            const totalHueco = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
+            const op = (slot.opciones || []).find(o => o.variante === varianteFid);
+            if (delta > 0) {
+                if (totalHueco >= Number(slot.cantidad)) return;                     // hueco completo
+                if (slot.distintas && actual >= 1) return;                            // deben ser distintas
+                // El stock debe alcanzar para TODOS los combos del carrito: el
+                // backend descuenta cantidad_del_combo × elegidas (pedidos.js).
+                const mult = Math.max(1, parseInt(item.quantity) || 1);
+                const stockOk = op && (op.seguir_vendiendo === true || Number(op.existencia) >= (actual + 1) * mult);
+                if (!stockOk) return;                                                 // sin stock
+            }
+            const nueva = Math.max(0, actual + delta);
+            if (nueva === 0) { delete sel[varianteFid]; } else { sel[varianteFid] = nueva; }
+            this.render();
+        }
+
+        // ¿El hueco puede completarse con el stock actual? (todas las opciones
+        // agotadas, o menos opciones disponibles que las requeridas con `distintas`)
+        _slotIncompletable(item) {
+            const mult = Math.max(1, parseInt(item.quantity) || 1);
+            return (item._slotsDef || []).some(s => {
+                let capacidad = 0;
+                (s.opciones || []).forEach(op => {
+                    if (op.seguir_vendiendo === true) { capacidad += Number(s.cantidad); return; }
+                    const porStock = Math.floor(Number(op.existencia) / mult);
+                    capacidad += s.distintas ? Math.min(1, porStock) : Math.max(0, porStock);
+                });
+                return capacidad < Number(s.cantidad);
+            });
+        }
+
+        confirmSlotPicker() {
+            const sp = this._slotPicker;
+            if (!sp) return;
+            const item = this.cart[sp.index];
+            // valida completitud de TODOS los huecos
+            const incompleto = item._slotsDef.find(s => {
+                const sel = sp.seleccion[s.insumo_fid] || {};
+                const total = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
+                return total !== Number(s.cantidad);
+            });
+            if (incompleto) return; // el botón va deshabilitado; guard extra
+            // arma el kit_slots con el shape que espera el backend (ventas.js)
+            const kitSlots = {};
+            item._slotsDef.forEach(s => {
+                const sel = sp.seleccion[s.insumo_fid] || {};
+                const elegidas = Object.keys(sel).map(vfid => {
+                    const op = (s.opciones || []).find(o => o.variante === vfid) || {};
+                    return {
+                        variante: vfid,
+                        nombre: op.nombre || '',
+                        atributos: op.atributos || '',
+                        sku: op.sku || '',
+                        imagen: op.imagen || '',
+                        costo: Number(op.costo) || 0,
+                        precio: Number(op.precio) || 0,
+                        cantidad: Number(sel[vfid]) || 0
+                    };
+                }).filter(e => e.cantidad > 0);
+                kitSlots[s.insumo_fid] = { padre_fid: s.padre_fid, producto: s.padre_nombre || s.label || '', elegidas };
+            });
+            item._kitSlots = kitSlots;
+            // Kits con precio POR INSUMOS: el precio real = base + Σ(variantes
+            // elegidas). Sin esto se cobraría el snapshot congelado del catálogo
+            // aunque la selección cueste distinto.
+            const pricing = item._slotsPricing;
+            if (pricing && pricing.suma_insumos === true) {
+                let extra = 0;
+                Object.values(kitSlots).forEach(sel => {
+                    (sel.elegidas || []).forEach(e => { extra += (Number(e.precio) || 0) * (Number(e.cantidad) || 0); });
+                });
+                item.precio = (Number(pricing.precio_base) || 0) + extra;
+            }
+            this._slotPicker = null;
+            this.render();
+        }
+
+        renderSlotPicker() {
+            const sp = this._slotPicker;
+            const item = this.cart[sp.index];
+            const todoCompleto = item._slotsDef.every(s => {
+                const sel = sp.seleccion[s.insumo_fid] || {};
+                return Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0) === Number(s.cantidad);
+            });
+            const huecosHTML = item._slotsDef.map(s => {
+                const sel = sp.seleccion[s.insumo_fid] || {};
+                const total = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
+                const completo = total === Number(s.cantidad);
+                const ops = (s.opciones || []).map(op => {
+                    const cant = Number(sel[op.variante]) || 0;
+                    const sinStock = !(op.seguir_vendiendo === true || Number(op.existencia) > 0);
+                    return `
+                        <div class="sacs-slot-op ${cant ? 'on' : ''} ${sinStock ? 'out' : ''}">
+                            <div class="sacs-slot-op-info">
+                                <span class="sacs-slot-op-nombre">${op.atributos || op.nombre}</span>
+                                <span class="sacs-slot-op-stock">${sinStock ? 'Agotado' : (Number(op.existencia) > 0 ? op.existencia + ' disp.' : 'Disponible')}</span>
+                            </div>
+                            <div class="sacs-quantity-control">
+                                <button class="sacs-qty-btn" ${cant ? '' : 'disabled'} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',-1)">−</button>
+                                <span class="sacs-qty-display">${cant}</span>
+                                <button class="sacs-qty-btn" ${(sinStock || completo) ? 'disabled' : ''} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',1)">+</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                return `
+                    <div class="sacs-slot-grupo">
+                        <div class="sacs-slot-head">
+                            <h3 class="sacs-slot-titulo">${s.label || s.padre_nombre}</h3>
+                            <span class="sacs-slot-prog ${completo ? 'ok' : ''}">${total}/${s.cantidad}</span>
+                        </div>
+                        <p class="sacs-slot-hint">Elige ${s.cantidad}${s.distintas ? ' diferentes' : ' (puedes repetir)'}.</p>
+                        ${ops}
+                    </div>
+                `;
+            }).join('');
+            return `
+                <div class="sacs-drawer-body">
+                    <button class="sacs-back-btn" onclick="sacsCheckout.cancelSlotPicker()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        Volver al carrito
+                    </button>
+                    <h2 class="sacs-page-title">Personaliza: ${item.nombre}</h2>
+                    ${huecosHTML}
+                    <button class="sacs-btn sacs-btn-primary" style="width:100%; margin-top: 12px;" ${todoCompleto ? '' : 'disabled'} onclick="sacsCheckout.confirmSlotPicker()">
+                        ${todoCompleto ? 'Confirmar selección' : 'Completa tu selección'}
+                    </button>
                 </div>
             `;
         }
@@ -2103,6 +2479,11 @@
         }
 
         renderFooter() {
+            // 🧩 Selector de huecos abierto: sin footer (el confirmar vive en el body)
+            if (this._slotPicker) {
+                return '';
+            }
+
             // Paso 2: Info del cliente - Solo botón sin resumen
             if (this.currentStep === 2) {
                 return `
@@ -2195,6 +2576,25 @@
                     e.stopPropagation();
 
                     if (this.currentStep === 1) {
+                        // 🧩 Guard de kits: no avanzar con combos sin personalizar
+                        // (si no, el pedido caería en kit_slots_pendiente en el backend).
+                        // Combos incompletables por stock se sacan solos del carrito
+                        // (cantidad 0) para no atrapar al comprador en un selector muerto.
+                        let huboAgotado = false;
+                        this.cart.forEach((it, i) => {
+                            if (it._slotsDef && it._slotsDef.length && it.quantity > 0 && !this._kitResuelto(it) && this._slotIncompletable(it)) {
+                                console.log('Kit agotado (huecos incompletables) → cantidad 0:', it.nombre);
+                                it.quantity = 0;
+                                huboAgotado = true;
+                            }
+                        });
+                        if (huboAgotado) { this.render(); return; }
+                        const pendienteIdx = this.cart.findIndex(it => it._slotsDef && it._slotsDef.length && it.quantity > 0 && !this._kitResuelto(it));
+                        if (pendienteIdx !== -1) {
+                            console.log('Kit sin personalizar → abrir selector', this.cart[pendienteIdx].nombre);
+                            this.openSlotPicker(pendienteIdx);
+                            return;
+                        }
                         // Paso 1: Ir a paso 2 (info cliente)
                         console.log('Ir a paso 2 (info cliente)');
                         this.goToStep(2);
@@ -3161,7 +3561,10 @@
                         variante: item.variant || "",
                         descuento_importe: 0,
                         descuento_porcentaje: 0,
-                        uid: "-OUjfwh092oLaxFt0_T1"
+                        uid: "-OUjfwh092oLaxFt0_T1",
+                        // 🧩 Selección de huecos del kit (el backend la valida y
+                        // descuenta las variantes elegidas — mismo flujo que POS)
+                        ...(item._kitSlots ? { kit_slots: item._kitSlots } : {})
                     };
                 });
 
@@ -3748,6 +4151,34 @@
         onTermsChange(id) {
             const instance = id ? this.getInstance(id) : this._getLastInstance();
             if (instance) instance.onTermsChange();
+        },
+
+        /**
+         * 🧩 Kits/combos: abre el selector de huecos de un item del carrito
+         * @param {number} index - Índice del producto en el carrito
+         * @param {string} id - ID de la instancia (opcional)
+         */
+        openSlotPicker(index, id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.openSlotPicker(index);
+        },
+
+        /** 🧩 Cierra el selector de huecos sin confirmar */
+        cancelSlotPicker(id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.cancelSlotPicker();
+        },
+
+        /** 🧩 Suma/resta una variante dentro de un hueco del selector */
+        slotPickQty(insumoFid, varianteFid, delta, id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.slotPickQty(insumoFid, varianteFid, delta);
+        },
+
+        /** 🧩 Confirma la selección de todos los huecos del kit */
+        confirmSlotPicker(id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.confirmSlotPicker();
         },
 
         /**
