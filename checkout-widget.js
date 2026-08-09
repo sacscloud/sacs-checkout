@@ -1,6 +1,17 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
+ * Versión: 1.10.5 - Carrito y selector rediseñados (más visual y vendedor)
+ *   · Opciones en REJILLA táctil (antes: lista vertical): toda la tarjeta suma,
+ *     badge con la cantidad y botón − para quitar. Foto de la variante SOLO si
+ *     distingue (en tallas todas heredan la del padre y serían 5 fotos iguales).
+ *   · Atajo "llena las N que faltan con una sola": 10 combos = 40 calcetas, y a
+ *     un tap por pieza el selector era impracticable.
+ *   · Barra de avance + "Faltan N", y el botón dice cuánto falta.
+ *   · Un producto sin unidades ya NO muestra $0.00: muestra SU PRECIO (antes
+ *     había que agregarlo al carrito para enterarse de cuánto costaba).
+ *   · Resumen de la selección en chips; "Requerido" ámbar (leía como error) →
+ *     "Falta 1 paso" azul; "¡Últimas N!" cuando queda poco stock.
  * Versión: 1.10.4 - Huecos que se COBRAN aparte (acceso $599 + calceta $70)
  *   · Un hueco marcado `seleccion_variante.cobrar` suma el precio de cada
  *     variante elegida encima del precio del producto. Es por HUECO: la misma
@@ -732,47 +743,113 @@
                     border-radius: 10px;
                     font-size: 13px;
                 }
-                .sacs-kit-pendiente { background: #FEF3C7; border: 1px solid #FDE68A; }
+                /* Pendiente = un PASO por hacer, no un error: azul, no ámbar de alerta. */
+                .sacs-kit-pendiente { background: #EFF6FF; border: 1px solid #BFDBFE; }
                 .sacs-kit-ok { background: #ECFDF3; border: 1px solid #A7F3D0; }
+                .sacs-kit-agotado { background: #FEF3C7; border: 1px solid #FDE68A; }
                 .sacs-kit-req {
                     display: inline-block; font-size: 10px; font-weight: 700;
                     letter-spacing: .04em; text-transform: uppercase;
-                    background: #D97706; color: #fff; border-radius: 999px;
+                    background: #2563EB; color: #fff; border-radius: 999px;
                     padding: 2px 8px; margin-bottom: 6px;
                 }
-                .sacs-kit-txt { margin: 0 0 8px; color: #78350F; }
+                .sacs-kit-txt { margin: 0 0 8px; color: #1E3A8A; }
+                .sacs-kit-agotado .sacs-kit-txt { color: #78350F; }
                 .sacs-kit-btn {
-                    border: none; border-radius: 8px; padding: 8px 14px;
+                    border: none; border-radius: 8px; padding: 9px 14px;
                     font-size: 13px; font-weight: 600; cursor: pointer;
                     background: #111827; color: #fff;
+                    display: inline-flex; align-items: center; gap: 6px;
                 }
                 .sacs-kit-btn-sec { background: #fff; color: #065F46; border: 1px solid #A7F3D0; }
-                .sacs-kit-resumen { margin: 0 0 8px; padding-left: 16px; color: #065F46; }
-                .sacs-kit-resumen li { margin-bottom: 2px; }
-                .sacs-kit-extra { font-weight: 700; color: #047857; white-space: nowrap; }
-                .sacs-slot-precio { font-weight: 600; color: #047857; }
-                .sacs-slot-grupo {
-                    background: #F9FAFB; border: 1px solid #E5E7EB;
-                    border-radius: 12px; padding: 14px; margin-bottom: 14px;
+                /* Resumen de lo elegido: chips, no viñetas de texto. */
+                .sacs-kit-resumen { margin: 0 0 8px; padding: 0; list-style: none; }
+                .sacs-kit-resumen li { margin-bottom: 6px; }
+                .sacs-kit-lbl {
+                    display: block; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+                    text-transform: uppercase; color: #047857; margin-bottom: 4px;
                 }
-                .sacs-slot-head { display: flex; align-items: center; justify-content: space-between; }
+                .sacs-kit-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+                .sacs-kit-chip {
+                    display: inline-flex; align-items: center; gap: 4px;
+                    background: #fff; border: 1px solid #A7F3D0; border-radius: 999px;
+                    padding: 2px 9px; font-size: 12px; font-weight: 600; color: #065F46;
+                }
+                .sacs-kit-chip b { font-weight: 800; }
+                .sacs-kit-extra { font-weight: 700; color: #047857; white-space: nowrap; }
+                .sacs-slot-precio { font-weight: 700; color: #047857; }
+
+                .sacs-slot-grupo {
+                    background: #fff; border: 1px solid #E5E7EB;
+                    border-radius: 14px; padding: 14px; margin-bottom: 14px;
+                }
+                .sacs-slot-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
                 .sacs-slot-titulo { margin: 0; font-size: 15px; font-weight: 700; }
                 .sacs-slot-prog {
-                    font-size: 12px; font-weight: 700; border-radius: 999px;
-                    padding: 3px 10px; background: #FEF3C7; color: #92400E;
+                    font-size: 12px; font-weight: 800; border-radius: 999px;
+                    padding: 3px 10px; background: #F3F4F6; color: #4B5563;
+                    font-variant-numeric: tabular-nums; white-space: nowrap;
                 }
                 .sacs-slot-prog.ok { background: #D1FAE5; color: #065F46; }
-                .sacs-slot-hint { margin: 4px 0 10px; font-size: 12px; color: #6B7280; }
-                .sacs-slot-op {
-                    display: flex; align-items: center; justify-content: space-between;
-                    gap: 10px; padding: 8px 10px; border-radius: 10px;
-                    border: 1px solid #E5E7EB; background: #fff; margin-bottom: 8px;
+                /* Barra de avance: el comprador ve cuánto le falta sin contar. */
+                .sacs-slot-barra {
+                    height: 6px; border-radius: 999px; background: #F3F4F6;
+                    overflow: hidden; margin: 10px 0 4px;
                 }
-                .sacs-slot-op.on { border-color: #111827; box-shadow: 0 0 0 1px #111827; }
-                .sacs-slot-op.out { opacity: .5; }
-                .sacs-slot-op-info { display: flex; flex-direction: column; min-width: 0; }
-                .sacs-slot-op-nombre { font-size: 13px; font-weight: 600; }
-                .sacs-slot-op-stock { font-size: 11px; color: #6B7280; }
+                .sacs-slot-barra span {
+                    display: block; height: 100%; border-radius: 999px;
+                    background: #111827; transition: width .18s ease;
+                }
+                .sacs-slot-barra.ok span { background: #10B981; }
+                .sacs-slot-hint { margin: 2px 0 10px; font-size: 12px; color: #6B7280; }
+
+                /* Opciones en REJILLA táctil (antes: lista vertical de filas). */
+                .sacs-slot-grid {
+                    display: grid; gap: 8px;
+                    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+                }
+                .sacs-slot-op {
+                    position: relative; display: flex; flex-direction: column;
+                    align-items: center; gap: 4px; padding: 10px 6px 8px;
+                    border-radius: 12px; border: 1.5px solid #E5E7EB; background: #fff;
+                    cursor: pointer; user-select: none; text-align: center;
+                    transition: border-color .12s ease, background .12s ease, transform .08s ease;
+                }
+                .sacs-slot-op:hover:not(.out):not(.full) { border-color: #9CA3AF; }
+                .sacs-slot-op:active:not(.out) { transform: scale(.97); }
+                .sacs-slot-op.on { border-color: #111827; background: #F9FAFB; }
+                .sacs-slot-op.out, .sacs-slot-op.full { opacity: .45; cursor: not-allowed; }
+                .sacs-slot-op-foto {
+                    width: 46px; height: 46px; border-radius: 8px; object-fit: cover;
+                    background: #F3F4F6;
+                }
+                .sacs-slot-op-nombre { font-size: 15px; font-weight: 700; line-height: 1.1; }
+                .sacs-slot-op-stock { font-size: 10px; color: #9CA3AF; min-height: 13px; }
+                .sacs-slot-op-stock.pocas { color: #B45309; font-weight: 700; }
+                /* Producto aún no agregado: presente pero sin competir con lo elegido. */
+                .sacs-item-inactivo .sacs-item-image,
+                .sacs-item-inactivo .sacs-item-placeholder { opacity: .6; }
+                .sacs-item-inactivo .sacs-item-name { color: #6B7280; }
+                .sacs-item-unit { color: #9CA3AF; font-weight: 600; }
+                /* Badge con la cantidad elegida + su botón de quitar. */
+                .sacs-slot-badge {
+                    position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px;
+                    border-radius: 999px; background: #111827; color: #fff;
+                    font-size: 12px; font-weight: 800; line-height: 22px; padding: 0 6px;
+                }
+                .sacs-slot-menos {
+                    position: absolute; top: -7px; left: -7px; width: 22px; height: 22px;
+                    border-radius: 999px; background: #fff; color: #111827;
+                    border: 1.5px solid #E5E7EB; font-size: 15px; font-weight: 700;
+                    line-height: 1; cursor: pointer; padding: 0;
+                }
+                /* Atajo para no dar 40 taps cuando el hueco pide muchas piezas. */
+                .sacs-slot-llenar {
+                    display: block; width: 100%; margin-top: 6px; padding: 4px;
+                    font-size: 11px; font-weight: 700; color: #374151;
+                    background: #F3F4F6; border: none; border-radius: 8px; cursor: pointer;
+                }
+                .sacs-slot-llenar:hover { background: #E5E7EB; }
                 .sacs-qty-btn[disabled] { opacity: .35; cursor: not-allowed; }
 
                 .sacs-quantity-control {
@@ -1758,7 +1835,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.4</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.5</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1849,8 +1926,11 @@
         renderCart() {
             return `
                 <div class="sacs-drawer-body">
-                    ${this.cart.map((item, index) => `
-                        <div class="sacs-cart-item">
+                    ${this.cart.map((item, index) => {
+                        const enCarrito = Number(item.quantity) > 0;
+                        const unitario = parseFloat(item.precio) || 0;
+                        return `
+                        <div class="sacs-cart-item ${enCarrito ? 'sacs-item-activo' : 'sacs-item-inactivo'}">
                             ${item.imageUrl
                                 ? `<img class="sacs-item-image" src="${item.imageUrl}" alt="${item.nombre}">`
                                 : `<div class="sacs-item-placeholder">
@@ -1862,16 +1942,20 @@
                                 ${item.variant ? `<p class="sacs-item-variant">${item.variant}</p>` : ''}
                                 <div class="sacs-item-footer">
                                     <div class="sacs-quantity-control">
-                                        <button class="sacs-qty-btn" onclick="sacsCheckout.updateQuantity(${index}, ${item.quantity - 1})">−</button>
+                                        <button class="sacs-qty-btn" ${enCarrito ? '' : 'disabled'} onclick="sacsCheckout.updateQuantity(${index}, ${item.quantity - 1})">−</button>
                                         <span class="sacs-qty-display">${item.quantity}</span>
                                         <button class="sacs-qty-btn" onclick="sacsCheckout.updateQuantity(${index}, ${item.quantity + 1})">+</button>
                                     </div>
-                                    <span class="sacs-item-price">$${(parseFloat(item.precio) * item.quantity).toFixed(2)}</span>
+                                    ${enCarrito
+                                        ? `<span class="sacs-item-price">$${(unitario * item.quantity).toFixed(2)}</span>`
+                                        /* Sin unidades el importe es $0.00, que ocultaba CUÁNTO CUESTA el
+                                           producto: el comprador tenía que agregarlo para enterarse. */
+                                        : `<span class="sacs-item-price sacs-item-unit">$${unitario.toFixed(2)}</span>`}
                                 </div>
                                 ${this._kitBloqueHTML(item, index)}
                             </div>
                         </div>
-                    `).join('')}
+                    `; }).join('')}
                 </div>
             `;
         }
@@ -1936,7 +2020,7 @@
             // al comprador a un selector imposible de confirmar.
             if (!this._kitResuelto(item) && this._slotIncompletable(item)) {
                 return `
-                    <div class="sacs-kit-block sacs-kit-pendiente">
+                    <div class="sacs-kit-block sacs-kit-agotado">
                         <p class="sacs-kit-txt">😔 Este combo está agotado por el momento (sin opciones suficientes disponibles). Quítalo para continuar con tu compra.</p>
                         <button class="sacs-kit-btn" onclick="sacsCheckout.updateQuantity(${index}, 0)">Quitar del carrito</button>
                     </div>
@@ -1945,25 +2029,29 @@
             if (!this._kitResuelto(item)) {
                 return `
                     <div class="sacs-kit-block sacs-kit-pendiente">
-                        <span class="sacs-kit-req">Requerido</span>
-                        <p class="sacs-kit-txt">Este combo se personaliza: elige ${item._slotsDef.map(s => `${this._slotReq(s, item)} × ${s.padre_nombre || s.label}`).join(', ')}${this._kitUnidades(item) > 1 ? ` (para tus ${this._kitUnidades(item)})` : ''}.</p>
-                        <button class="sacs-kit-btn" onclick="sacsCheckout.openSlotPicker(${index})">Personalizar combo</button>
+                        <span class="sacs-kit-req">Falta 1 paso</span>
+                        <p class="sacs-kit-txt">Elige ${item._slotsDef.map(s => `<b>${this._slotReq(s, item)} × ${s.padre_nombre || s.label}</b>`).join(' y ')}${this._kitUnidades(item) > 1 ? ` (para tus ${this._kitUnidades(item)})` : ''}.</p>
+                        <button class="sacs-kit-btn" onclick="sacsCheckout.openSlotPicker(${index})">✨ Personalizar</button>
                     </div>
                 `;
             }
             const resumen = item._slotsDef.map(s => {
                 const sel = item._kitSlots[s.insumo_fid];
                 const elegidas = (sel && sel.elegidas) || [];
-                const partes = elegidas.map(e => `${e.cantidad}× ${e.atributos || e.nombre}`);
+                const chips = elegidas.map(e =>
+                    `<span class="sacs-kit-chip"><b>${e.cantidad}×</b> ${e.atributos || e.nombre}</span>`).join('');
                 // Si este hueco se cobra, decir CUÁNTO suma (el comprador no debe
                 // descubrir el cargo hasta el total).
                 let extra = '';
                 if (s.cobrar === true) {
                     const monto = elegidas.reduce((t, e) => t + (Number(e.precio) || 0) * (Number(e.cantidad) || 0), 0)
                         * this._kitUnidades(item);
-                    if (monto > 0) extra = ` <span class="sacs-kit-extra">+$${monto.toFixed(2)}</span>`;
+                    if (monto > 0) extra = `<span class="sacs-kit-extra">+$${monto.toFixed(2)}</span>`;
                 }
-                return `<li><b>${s.padre_nombre || s.label}:</b> ${partes.join(' · ')}${extra}</li>`;
+                return `<li>
+                    <span class="sacs-kit-lbl">✓ ${s.padre_nombre || s.label}</span>
+                    <span class="sacs-kit-chips">${chips}${extra}</span>
+                </li>`;
             }).join('');
             return `
                 <div class="sacs-kit-block sacs-kit-ok">
@@ -2039,6 +2127,27 @@
             const nueva = Math.max(0, actual + delta);
             if (nueva === 0) { delete sel[varianteFid]; } else { sel[varianteFid] = nueva; }
             this.render();
+        }
+
+        // "Todas iguales": completa de un golpe lo que falta del hueco con UNA
+        // variante. Reusa slotPickQty para no duplicar los topes (stock, distintas,
+        // cupo del hueco): si alguno frena, se detiene solo.
+        slotFill(insumoFid, varianteFid) {
+            const sp = this._slotPicker;
+            if (!sp) return;
+            const item = this.cart[sp.index];
+            const slot = (item._slotsDef || []).find(s => s.insumo_fid === insumoFid);
+            if (!slot) return;
+            const req = this._slotReq(slot, item);
+            const sel = sp.seleccion[insumoFid] || {};
+            let guarda = req + 1;   // tope duro: nunca un bucle infinito si algo frena
+            while (guarda-- > 0) {
+                const antes = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
+                if (antes >= req) break;
+                this.slotPickQty(insumoFid, varianteFid, 1);
+                const despues = Object.values(sp.seleccion[insumoFid] || {}).reduce((t, n) => t + (Number(n) || 0), 0);
+                if (despues === antes) break;   // topó con stock/regla: no insistir
+            }
         }
 
         // ¿El hueco puede completarse con el stock actual? (todas las opciones
@@ -2187,6 +2296,13 @@
                 const sel = sp.seleccion[s.insumo_fid] || {};
                 return Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0) === this._slotReq(s, item);
             });
+            // Cuántas piezas faltan en TODOS los huecos: el botón lo dice en vez de
+            // un "Completa tu selección" que no explica qué falta.
+            const faltanTotal = item._slotsDef.reduce((t, s) => {
+                const sel = sp.seleccion[s.insumo_fid] || {};
+                const n = Object.values(sel).reduce((a, b) => a + (Number(b) || 0), 0);
+                return t + Math.max(0, this._slotReq(s, item) - n);
+            }, 0);
             const huecosHTML = item._slotsDef.map(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
                 const req = this._slotReq(s, item);
@@ -2195,32 +2311,59 @@
                 // ¿Este hueco se cobra aparte? (o el kit cobra por insumos, donde
                 // toda la selección suma). Si sí, cada opción muestra su precio.
                 const cobra = s.cobrar === true || (item._slotsPricing && item._slotsPricing.suma_insumos === true);
+                // La FOTO solo aporta cuando distingue una opción de otra. En tallas
+                // todas heredan la del padre (5 fotos idénticas = ruido), así que se
+                // muestra únicamente si hay más de una imagen distinta.
+                const fotos = new Set((s.opciones || []).map(o => o.imagen).filter(Boolean));
+                const conFoto = fotos.size > 1;
                 const ops = (s.opciones || []).map(op => {
                     const cant = Number(sel[op.variante]) || 0;
                     const topeVar = s.distintas ? unidades : req;
                     const sinStock = !(op.seguir_vendiendo === true || Number(op.existencia) > 0);
+                    const lleno = !sinStock && (completo || cant >= topeVar);
+                    // El pie de cada tarjeta dice lo ÚNICO que importa decidir: el
+                    // cargo si el hueco se cobra, o la escasez si queda poco. Un
+                    // "Disponible" en las 5 tallas era ruido puro.
+                    const stock = Number(op.existencia) || 0;
+                    const pocas = !sinStock && op.seguir_vendiendo !== true && stock > 0 && stock <= 10;
+                    const pie = sinStock ? 'Agotado'
+                        : (cobra && Number(op.precio) > 0 ? `<span class="sacs-slot-precio">+$${Number(op.precio).toFixed(2)}</span>`
+                        : (pocas ? `¡Últimas ${stock}!` : ''));
+                    // Toda la tarjeta suma: menos precisión requerida que apuntarle al "+".
+                    const tap = (sinStock || lleno) ? '' : `onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',1)"`;
                     return `
-                        <div class="sacs-slot-op ${cant ? 'on' : ''} ${sinStock ? 'out' : ''}">
-                            <div class="sacs-slot-op-info">
-                                <span class="sacs-slot-op-nombre">${op.atributos || op.nombre}</span>
-                                <span class="sacs-slot-op-stock">${cobra && Number(op.precio) > 0 ? `<span class="sacs-slot-precio">+$${Number(op.precio).toFixed(2)}</span> · ` : ''}${sinStock ? 'Agotado' : (Number(op.existencia) > 0 ? op.existencia + ' disp.' : 'Disponible')}</span>
-                            </div>
-                            <div class="sacs-quantity-control">
-                                <button class="sacs-qty-btn" ${cant ? '' : 'disabled'} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',-1)">−</button>
-                                <span class="sacs-qty-display">${cant}</span>
-                                <button class="sacs-qty-btn" ${(sinStock || completo || cant >= topeVar) ? 'disabled' : ''} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',1)">+</button>
-                            </div>
+                        <div class="sacs-slot-op ${cant ? 'on' : ''} ${sinStock ? 'out' : ''} ${lleno && !cant ? 'full' : ''}" ${tap}>
+                            ${cant ? `<button class="sacs-slot-menos" title="Quitar uno" onclick="event.stopPropagation();sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',-1)">−</button>
+                                      <span class="sacs-slot-badge">${cant}</span>` : ''}
+                            ${conFoto && op.imagen ? `<img class="sacs-slot-op-foto" src="${op.imagen}" alt="${op.atributos || op.nombre}">` : ''}
+                            <span class="sacs-slot-op-nombre">${op.atributos || op.nombre}</span>
+                            <span class="sacs-slot-op-stock ${pocas ? 'pocas' : ''}">${pie}</span>
                         </div>
                     `;
                 }).join('');
+                // Atajo "todas iguales": con 10 combos son 40 piezas, y a un tap por
+                // pieza el selector se vuelve impracticable. Solo tiene sentido si
+                // una sola opción puede cubrir lo que falta.
+                const faltan = req - total;
+                const puedeLlenar = faltan > 0 && !s.distintas;
+                const llenarHTML = puedeLlenar ? `
+                    <div class="sacs-slot-hint" style="margin:10px 0 4px">O llena las ${faltan} que faltan con una sola:</div>
+                    <div class="sacs-kit-chips">
+                        ${(s.opciones || []).filter(op => op.seguir_vendiendo === true || Number(op.existencia) >= faltan)
+                            .map(op => `<button class="sacs-kit-chip" style="cursor:pointer;border-color:#E5E7EB;color:#374151"
+                                onclick="sacsCheckout.slotFill('${s.insumo_fid}','${op.variante}')">${op.atributos || op.nombre}</button>`).join('')}
+                    </div>` : '';
+                const pct = req > 0 ? Math.min(100, (total / req) * 100) : 0;
                 return `
                     <div class="sacs-slot-grupo">
                         <div class="sacs-slot-head">
                             <h3 class="sacs-slot-titulo">${s.padre_nombre || s.label}</h3>
-                            <span class="sacs-slot-prog ${completo ? 'ok' : ''}">${total}/${req}</span>
+                            <span class="sacs-slot-prog ${completo ? 'ok' : ''}">${completo ? '✓ ' : ''}${total}/${req}</span>
                         </div>
-                        <p class="sacs-slot-hint">Elige ${req}${(s.distintas && Number(s.cantidad) > 1) ? (unidades > 1 ? ' (diferentes dentro de cada uno)' : ' diferentes') : ' (puedes repetir)'}${unidades > 1 ? ` — ${s.cantidad} por cada uno de tus ${unidades}` : ''}.</p>
-                        ${ops}
+                        <div class="sacs-slot-barra ${completo ? 'ok' : ''}"><span style="width:${pct}%"></span></div>
+                        <p class="sacs-slot-hint">${completo ? '¡Listo!' : `Faltan ${faltan}`}${(s.distintas && Number(s.cantidad) > 1) ? (unidades > 1 ? ' · diferentes dentro de cada uno' : ' · deben ser diferentes') : ' · puedes repetir'}${unidades > 1 ? ` · ${s.cantidad} por cada uno de tus ${unidades}` : ''}</p>
+                        <div class="sacs-slot-grid">${ops}</div>
+                        ${llenarHTML}
                     </div>
                 `;
             }).join('');
@@ -2233,7 +2376,7 @@
                     <h2 class="sacs-page-title">Personaliza: ${item.nombre}</h2>
                     ${huecosHTML}
                     <button class="sacs-btn sacs-btn-primary" style="width:100%; margin-top: 12px;" ${todoCompleto ? '' : 'disabled'} onclick="sacsCheckout.confirmSlotPicker()">
-                        ${todoCompleto ? 'Confirmar selección' : 'Completa tu selección'}
+                        ${todoCompleto ? '✓ Confirmar selección' : `Te faltan ${faltanTotal}`}
                     </button>
                 </div>
             `;
@@ -4362,6 +4505,12 @@
         slotPickQty(insumoFid, varianteFid, delta, id) {
             const instance = id ? this.getInstance(id) : this._getLastInstance();
             if (instance) instance.slotPickQty(insumoFid, varianteFid, delta);
+        },
+
+        /** 🧩 "Todas iguales": llena lo que falta del hueco con una sola variante */
+        slotFill(insumoFid, varianteFid, id) {
+            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            if (instance) instance.slotFill(insumoFid, varianteFid);
         },
 
         /** 🧩 Confirma la selección de todos los huecos del kit */
