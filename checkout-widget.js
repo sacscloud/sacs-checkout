@@ -1,6 +1,14 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
+ * Versión: 1.10.3 - Los huecos del combo escalan con la CANTIDAD de la línea
+ *   · 2 combos de 4 calcetas = elegir 8 (mezcla libre), no las mismas 4 repetidas;
+ *     2 accesos = elegir 2 tallas. El selector cuenta piezas de la LÍNEA.
+ *   · Cambiar la cantidad después de elegir invalida la selección (antes se
+ *     quedaba en verde con la selección vieja y el guard la dejaba pasar).
+ *   · Al pagar, una línea de N kits se abre en N líneas de cantidad 1 con su
+ *     propio kit_slots: el backend lee kit_slots como "por kit" y multiplica
+ *     por la cantidad, así que una mezcla libre no cabe en una sola línea.
  * Versión: 1.10.2 - Combos con hueco sobre el candado JWT + carrito no falla en silencio
  *   · Reimplementado sobre la v1.9.23 (endpoints /tienda/* seguros): la rama
  *     v1.10.x anterior seguía pidiendo /rest/* y hoy daría 401 en toda la tienda.
@@ -1741,7 +1749,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.2</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.3</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1899,6 +1907,19 @@
             }));
         }
 
+        // 🔢 Unidades del kit en la línea (mínimo 1 para no dividir entre 0).
+        _kitUnidades(item) {
+            return Math.max(1, parseInt(item && item.quantity, 10) || 1);
+        }
+
+        // 🔢 CUÁNTAS piezas pide el hueco EN TOTAL para la línea = por-kit × unidades.
+        // v1.10.3: antes el selector pedía siempre `s.cantidad` (por kit) sin importar
+        // cuántos combos llevaras, así que 2 combos = las MISMAS 4 calcetas repetidas
+        // y 2 accesos = 1 sola talla. El comprador debe poder elegir las 8 (o las 2).
+        _slotReq(slot, item) {
+            return (Number(slot.cantidad) || 0) * this._kitUnidades(item);
+        }
+
         // Bloque bajo el item del carrito: pide personalizar o resume la selección.
         _kitBloqueHTML(item, index) {
             if (!item._slotsDef || !item._slotsDef.length || item.quantity <= 0) return '';
@@ -1916,7 +1937,7 @@
                 return `
                     <div class="sacs-kit-block sacs-kit-pendiente">
                         <span class="sacs-kit-req">Requerido</span>
-                        <p class="sacs-kit-txt">Este combo se personaliza: elige ${item._slotsDef.map(s => `${s.cantidad} × ${s.label || s.padre_nombre}`).join(', ')}.</p>
+                        <p class="sacs-kit-txt">Este combo se personaliza: elige ${item._slotsDef.map(s => `${this._slotReq(s, item)} × ${s.padre_nombre || s.label}`).join(', ')}${this._kitUnidades(item) > 1 ? ` (para tus ${this._kitUnidades(item)})` : ''}.</p>
                         <button class="sacs-kit-btn" onclick="sacsCheckout.openSlotPicker(${index})">Personalizar combo</button>
                     </div>
                 `;
@@ -1924,7 +1945,7 @@
             const resumen = item._slotsDef.map(s => {
                 const sel = item._kitSlots[s.insumo_fid];
                 const partes = (sel && sel.elegidas || []).map(e => `${e.cantidad}× ${e.atributos || e.nombre}`);
-                return `<li><b>${s.label || s.padre_nombre}:</b> ${partes.join(' · ')}</li>`;
+                return `<li><b>${s.padre_nombre || s.label}:</b> ${partes.join(' · ')}</li>`;
             }).join('');
             return `
                 <div class="sacs-kit-block sacs-kit-ok">
@@ -1934,6 +1955,10 @@
             `;
         }
 
+        // ⚠️ Depende de item.quantity: si el comprador sube/baja la cantidad DESPUÉS de
+        // elegir, la selección deja de estar completa y el carrito vuelve a pedir
+        // "Personalizar" (antes se quedaba en verde con la selección vieja y el guard
+        // de Continuar la dejaba pasar).
         _kitResuelto(item) {
             if (!item._slotsDef || !item._slotsDef.length) return true;
             if (!item._kitSlots) return false;
@@ -1941,7 +1966,7 @@
                 const sel = item._kitSlots[s.insumo_fid];
                 if (!sel || !Array.isArray(sel.elegidas)) return false;
                 const total = sel.elegidas.reduce((t, e) => t + (Number(e.cantidad) || 0), 0);
-                return total === Number(s.cantidad);
+                return total === this._slotReq(s, item);
             });
         }
 
@@ -1953,7 +1978,16 @@
             item._slotsDef.forEach(s => {
                 seleccion[s.insumo_fid] = {};
                 const prev = item._kitSlots && item._kitSlots[s.insumo_fid];
-                (prev && prev.elegidas || []).forEach(e => { seleccion[s.insumo_fid][e.variante] = Number(e.cantidad) || 0; });
+                // RECORTE: si bajó la cantidad, lo precargado puede exceder el nuevo
+                // requerido (8 elegidas y ahora solo caben 4) → el picker quedaría
+                // sobre-lleno y sin forma de confirmar. Se precarga hasta el tope.
+                const req = this._slotReq(s, item);
+                const capVar = s.distintas ? this._kitUnidades(item) : req;
+                let acum = 0;
+                (prev && prev.elegidas || []).forEach(e => {
+                    let n = Math.min(Number(e.cantidad) || 0, capVar, req - acum);
+                    if (n > 0) { seleccion[s.insumo_fid][e.variante] = n; acum += n; }
+                });
             });
             this._slotPicker = { index, seleccion };
             this.render();
@@ -1975,12 +2009,13 @@
             const totalHueco = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
             const op = (slot.opciones || []).find(o => o.variante === varianteFid);
             if (delta > 0) {
-                if (totalHueco >= Number(slot.cantidad)) return;                     // hueco completo
-                if (slot.distintas && actual >= 1) return;                            // deben ser distintas
-                // El stock debe alcanzar para TODOS los combos del carrito: el
-                // backend descuenta cantidad_del_combo × elegidas (pedidos.js).
-                const mult = Math.max(1, parseInt(item.quantity) || 1);
-                const stockOk = op && (op.seguir_vendiendo === true || Number(op.existencia) >= (actual + 1) * mult);
+                // El picker ya cuenta piezas ABSOLUTAS de la línea (por-kit × unidades),
+                // así que ni el tope ni el stock se multiplican otra vez.
+                if (totalHueco >= this._slotReq(slot, item)) return;                  // hueco completo
+                // "distintas" es por KIT: con N kits caben hasta N piezas de la misma
+                // talla (una por kit), no una sola en toda la línea.
+                if (slot.distintas && actual >= this._kitUnidades(item)) return;
+                const stockOk = op && (op.seguir_vendiendo === true || Number(op.existencia) >= (actual + 1));
                 if (!stockOk) return;                                                 // sin stock
             }
             const nueva = Math.max(0, actual + delta);
@@ -1991,59 +2026,111 @@
         // ¿El hueco puede completarse con el stock actual? (todas las opciones
         // agotadas, o menos opciones disponibles que las requeridas con `distintas`)
         _slotIncompletable(item) {
-            const mult = Math.max(1, parseInt(item.quantity) || 1);
+            const unidades = this._kitUnidades(item);
             return (item._slotsDef || []).some(s => {
+                const req = this._slotReq(s, item);
                 let capacidad = 0;
                 (s.opciones || []).forEach(op => {
-                    if (op.seguir_vendiendo === true) { capacidad += Number(s.cantidad); return; }
-                    const porStock = Math.floor(Number(op.existencia) / mult);
-                    capacidad += s.distintas ? Math.min(1, porStock) : Math.max(0, porStock);
+                    if (op.seguir_vendiendo === true) { capacidad += req; return; }
+                    const stock = Math.max(0, Number(op.existencia) || 0);
+                    // Con `distintas` cada talla cabe una vez POR KIT → tope `unidades`.
+                    capacidad += s.distintas ? Math.min(unidades, stock) : stock;
                 });
-                return capacidad < Number(s.cantidad);
+                return capacidad < req;
             });
+        }
+
+        // Reparte las piezas elegidas de un hueco entre las N unidades del kit.
+        // `sel` = {variante: cantidad} con total = cantidad_por_kit × N.
+        // Se reparte por RONDAS ciclando la unidad destino y manteniendo juntas las
+        // piezas de una misma variante: así ninguna unidad repite variante mientras
+        // su cantidad no pase de N — que es justo el tope que impone `distintas`.
+        // Devuelve [ {variante: cantidad}, ... ] con N entradas de `porKit` piezas.
+        _repartirSlot(sel, porKit, unidades) {
+            const buckets = Array.from({ length: unidades }, () => ({}));
+            const vfids = Object.keys(sel).sort((a, b) => (Number(sel[b]) || 0) - (Number(sel[a]) || 0));
+            let pos = 0;
+            vfids.forEach(vfid => {
+                let n = Number(sel[vfid]) || 0;
+                while (n-- > 0) {
+                    const b = buckets[pos % unidades];
+                    b[vfid] = (b[vfid] || 0) + 1;
+                    pos++;
+                }
+            });
+            return buckets;
+        }
+
+        // {variante: cantidad} → elegidas[] con el shape que espera el backend.
+        _elegidasDe(slotDef, sel) {
+            return Object.keys(sel).map(vfid => {
+                const op = (slotDef.opciones || []).find(o => o.variante === vfid) || {};
+                return {
+                    variante: vfid,
+                    nombre: op.nombre || '',
+                    atributos: op.atributos || '',
+                    sku: op.sku || '',
+                    imagen: op.imagen || '',
+                    costo: Number(op.costo) || 0,
+                    precio: Number(op.precio) || 0,
+                    cantidad: Number(sel[vfid]) || 0
+                };
+            }).filter(e => e.cantidad > 0);
         }
 
         confirmSlotPicker() {
             const sp = this._slotPicker;
             if (!sp) return;
             const item = this.cart[sp.index];
-            // valida completitud de TODOS los huecos
+            const unidades = this._kitUnidades(item);
+            // valida completitud de TODOS los huecos (contra el requerido de la LÍNEA)
             const incompleto = item._slotsDef.find(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
                 const total = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
-                return total !== Number(s.cantidad);
+                return total !== this._slotReq(s, item);
             });
             if (incompleto) return; // el botón va deshabilitado; guard extra
-            // arma el kit_slots con el shape que espera el backend (ventas.js)
+            // kit_slots AGREGADO (solo para pintar el resumen del carrito).
             const kitSlots = {};
+            // kit_slots POR UNIDAD: lo que de verdad viaja al backend. `ventas.js` lee
+            // las elegidas como "por kit" y `pedidos.js` multiplica por la cantidad de
+            // la línea, así que una línea de N kits con mezcla libre es imposible de
+            // representar: se manda UNA LÍNEA DE CANTIDAD 1 POR UNIDAD.
+            const porUnidad = Array.from({ length: unidades }, () => ({}));
             item._slotsDef.forEach(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
-                const elegidas = Object.keys(sel).map(vfid => {
-                    const op = (s.opciones || []).find(o => o.variante === vfid) || {};
-                    return {
-                        variante: vfid,
-                        nombre: op.nombre || '',
-                        atributos: op.atributos || '',
-                        sku: op.sku || '',
-                        imagen: op.imagen || '',
-                        costo: Number(op.costo) || 0,
-                        precio: Number(op.precio) || 0,
-                        cantidad: Number(sel[vfid]) || 0
+                kitSlots[s.insumo_fid] = {
+                    padre_fid: s.padre_fid,
+                    producto: s.padre_nombre || s.label || '',
+                    elegidas: this._elegidasDe(s, sel)
+                };
+                const buckets = this._repartirSlot(sel, Number(s.cantidad) || 0, unidades);
+                buckets.forEach((b, u) => {
+                    porUnidad[u][s.insumo_fid] = {
+                        padre_fid: s.padre_fid,
+                        producto: s.padre_nombre || s.label || '',
+                        elegidas: this._elegidasDe(s, b)
                     };
-                }).filter(e => e.cantidad > 0);
-                kitSlots[s.insumo_fid] = { padre_fid: s.padre_fid, producto: s.padre_nombre || s.label || '', elegidas };
+                });
             });
             item._kitSlots = kitSlots;
+            item._kitSlotsUnidades = porUnidad;
             // Kits con precio POR INSUMOS: el precio real = base + Σ(variantes
             // elegidas). Sin esto se cobraría el snapshot congelado del catálogo
-            // aunque la selección cueste distinto.
+            // aunque la selección cueste distinto. Con mezcla libre cada unidad puede
+            // costar distinto → se guarda el precio de CADA una y el carrito muestra
+            // el promedio (el cobro y el pedido usan los exactos).
             const pricing = item._slotsPricing;
             if (pricing && pricing.suma_insumos === true) {
-                let extra = 0;
-                Object.values(kitSlots).forEach(sel => {
-                    (sel.elegidas || []).forEach(e => { extra += (Number(e.precio) || 0) * (Number(e.cantidad) || 0); });
+                const base = Number(pricing.precio_base) || 0;
+                item._kitPreciosUnidad = porUnidad.map(slots => {
+                    let extra = 0;
+                    Object.values(slots).forEach(sel => {
+                        (sel.elegidas || []).forEach(e => { extra += (Number(e.precio) || 0) * (Number(e.cantidad) || 0); });
+                    });
+                    return base + extra;
                 });
-                item.precio = (Number(pricing.precio_base) || 0) + extra;
+                item.precio = item._kitPreciosUnidad.reduce((t, p) => t + p, 0) / unidades;
             }
             this._slotPicker = null;
             this.render();
@@ -2052,16 +2139,19 @@
         renderSlotPicker() {
             const sp = this._slotPicker;
             const item = this.cart[sp.index];
+            const unidades = this._kitUnidades(item);
             const todoCompleto = item._slotsDef.every(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
-                return Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0) === Number(s.cantidad);
+                return Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0) === this._slotReq(s, item);
             });
             const huecosHTML = item._slotsDef.map(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
+                const req = this._slotReq(s, item);
                 const total = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
-                const completo = total === Number(s.cantidad);
+                const completo = total === req;
                 const ops = (s.opciones || []).map(op => {
                     const cant = Number(sel[op.variante]) || 0;
+                    const topeVar = s.distintas ? unidades : req;
                     const sinStock = !(op.seguir_vendiendo === true || Number(op.existencia) > 0);
                     return `
                         <div class="sacs-slot-op ${cant ? 'on' : ''} ${sinStock ? 'out' : ''}">
@@ -2072,7 +2162,7 @@
                             <div class="sacs-quantity-control">
                                 <button class="sacs-qty-btn" ${cant ? '' : 'disabled'} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',-1)">−</button>
                                 <span class="sacs-qty-display">${cant}</span>
-                                <button class="sacs-qty-btn" ${(sinStock || completo) ? 'disabled' : ''} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',1)">+</button>
+                                <button class="sacs-qty-btn" ${(sinStock || completo || cant >= topeVar) ? 'disabled' : ''} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',1)">+</button>
                             </div>
                         </div>
                     `;
@@ -2080,10 +2170,10 @@
                 return `
                     <div class="sacs-slot-grupo">
                         <div class="sacs-slot-head">
-                            <h3 class="sacs-slot-titulo">${s.label || s.padre_nombre}</h3>
-                            <span class="sacs-slot-prog ${completo ? 'ok' : ''}">${total}/${s.cantidad}</span>
+                            <h3 class="sacs-slot-titulo">${s.padre_nombre || s.label}</h3>
+                            <span class="sacs-slot-prog ${completo ? 'ok' : ''}">${total}/${req}</span>
                         </div>
-                        <p class="sacs-slot-hint">Elige ${s.cantidad}${s.distintas ? ' diferentes' : ' (puedes repetir)'}.</p>
+                        <p class="sacs-slot-hint">Elige ${req}${(s.distintas && Number(s.cantidad) > 1) ? (unidades > 1 ? ' (diferentes dentro de cada uno)' : ' diferentes') : ' (puedes repetir)'}${unidades > 1 ? ` — ${s.cantidad} por cada uno de tus ${unidades}` : ''}.</p>
                         ${ops}
                     </div>
                 `;
@@ -2684,7 +2774,24 @@
 
         updateQuantity(index, newQuantity) {
             if (newQuantity < 0) return;
-            this.cart[index].quantity = newQuantity;
+            const item = this.cart[index];
+            const cambia = Number(item.quantity) !== Number(newQuantity);
+            item.quantity = newQuantity;
+
+            // 🧩 Cambió la cantidad de un kit con hueco: el reparto por unidad y el
+            // precio derivado quedaron viejos. `_kitResuelto` ya vuelve a pedir
+            // "Personalizar" (el requerido cambió); aquí se tira lo derivado para que
+            // NUNCA se mande un reparto que no corresponde a la nueva cantidad.
+            if (cambia && item._slotsDef && item._slotsDef.length) {
+                delete item._kitSlotsUnidades;
+                delete item._kitPreciosUnidad;
+                // Si el selector estaba abierto sobre este item, se reabre con el
+                // requerido nuevo (si no, el contador se queda con el tope viejo).
+                if (this._slotPicker && this._slotPicker.index === index) {
+                    this._slotPicker = null;
+                    if (newQuantity > 0) this.openSlotPicker(index);
+                }
+            }
 
             // Guardar posición del scroll antes de re-renderizar
             const drawerBody = document.querySelector('.sacs-drawer-body');
@@ -2701,10 +2808,83 @@
 
         calculateTotal() {
             return this.cart.reduce((total, item) => {
+                // Kit con precio por insumos y mezcla libre: cada unidad puede costar
+                // distinto → se suman los precios exactos (item.precio es el promedio,
+                // solo para pintar) y así el cobro de Stripe cuadra con el pedido.
+                if (Array.isArray(item._kitPreciosUnidad)
+                    && item._kitPreciosUnidad.length === (parseInt(item.quantity) || 0)) {
+                    return total + item._kitPreciosUnidad.reduce((t, p) => t + (Number(p) || 0), 0);
+                }
                 const precio = parseFloat(item.precio) || 0;
                 const cantidad = parseInt(item.quantity) || 0;
                 return total + (precio * cantidad);
             }, 0);
+        }
+
+        // Una línea del `details` del pedido. Se extrajo del map original para poder
+        // emitir VARIAS líneas del mismo item (kits con hueco y cantidad > 1).
+        _detalleDePedido(item, cantidad, precioUnitario) {
+            const precioUnit = precioUnitario != null ? Number(precioUnitario) : Number(item.precio);
+            const costoUnitario = Number(item.costo) || 0; // Usar 0 si no viene costo
+            const valorImpuesto = Number(item.valorimpuesto) / 100; // Convertir porcentaje a decimal
+
+            // Cálculos financieros (igual que fashion-forward)
+            const precioSinImpuesto = precioUnit / (1 + valorImpuesto);
+            const importeSinImpuesto = precioSinImpuesto * cantidad;
+            const impuestoImporte = importeSinImpuesto * valorImpuesto;
+            const importeConImpuesto = importeSinImpuesto + impuestoImporte;
+
+            // Usar TODO el producto tal como viene de MongoDB
+            return {
+                // CAMPOS OBLIGATORIOS
+                id_producto: item._esVariante && item.id_producto ? item.id_producto : item.fid,
+                costo: costoUnitario,
+                cantidad: cantidad,
+                tipo: item.tipo,
+                fid: item.fid,
+
+                // CAMPOS DEL ARTÍCULO COMPLETO (usar los campos originales)
+                code: item.code || "",
+                nombre: item.nombre,
+                sku: item.sku || "",
+                precio: precioSinImpuesto, // SIN impuestos
+                precio_original: Number(item.precio_original || item.precio),
+                precio_carrito: Number(item.precio_carrito || item.precio),
+
+                // RELACIONES (usar los campos originales del producto)
+                proveedor: item.proveedor || "",
+                nombreproveedor: item.nombreproveedor || "",
+                categoria: item.categoria || "",
+                nombrecategoria: item.nombrecategoria || "",
+                marca: item.marca || "",
+                nombremarca: item.nombremarca || "",
+                unidad: item.unidad,
+                unidadclave: item.unidadclave,
+                unidadnombre: item.unidadnombre,
+
+                // MONEDA E IMPUESTOS (usar los campos originales)
+                moneda: item.moneda,
+                nombremoneda: item.nombremoneda || "MXN",
+                moneda_original: item.moneda_original || item.moneda,
+                impuestos: item.impuestos,
+                nombreimpuestos: item.nombreimpuestos,
+                valorimpuesto: Number(item.valorimpuesto),
+
+                // CÁLCULOS FINANCIEROS
+                importe: importeSinImpuesto,
+                importe_con_impuestos: importeConImpuesto,
+                impuesto_importe: impuestoImporte,
+                total_impuesto: impuestoImporte,
+
+                // OTROS CAMPOS
+                variante: item.variant || "",
+                descuento_importe: 0,
+                descuento_porcentaje: 0,
+                uid: "-OUjfwh092oLaxFt0_T1",
+                // 🧩 Selección de huecos del kit (el backend la valida y
+                // descuenta las variantes elegidas — mismo flujo que POS)
+                ...(item._kitSlots ? { kit_slots: item._kitSlots } : {})
+            };
         }
 
         goToStep(step) {
@@ -3503,70 +3683,29 @@
                 };
 
                 // Construir details del pedido usando los productos completos de MongoDB
-                const details = this.cart.map(item => {
-                    const cantidad = Number(item.quantity);
-                    const precioUnitario = Number(item.precio);
-                    const costoUnitario = Number(item.costo) || 0; // Usar 0 si no viene costo
-                    const valorImpuesto = Number(item.valorimpuesto) / 100; // Convertir porcentaje a decimal
-
-                    // Cálculos financieros (igual que fashion-forward)
-                    const precioSinImpuesto = precioUnitario / (1 + valorImpuesto);
-                    const importeSinImpuesto = precioSinImpuesto * cantidad;
-                    const impuestoImporte = importeSinImpuesto * valorImpuesto;
-                    const importeConImpuesto = importeSinImpuesto + impuestoImporte;
-
-                    // Usar TODO el producto tal como viene de MongoDB
-                    return {
-                        // CAMPOS OBLIGATORIOS
-                        id_producto: item._esVariante && item.id_producto ? item.id_producto : item.fid,
-                        costo: costoUnitario,
-                        cantidad: cantidad,
-                        tipo: item.tipo,
-                        fid: item.fid,
-
-                        // CAMPOS DEL ARTÍCULO COMPLETO (usar los campos originales)
-                        code: item.code || "",
-                        nombre: item.nombre,
-                        sku: item.sku || "",
-                        precio: precioSinImpuesto, // SIN impuestos
-                        precio_original: Number(item.precio_original || item.precio),
-                        precio_carrito: Number(item.precio_carrito || item.precio),
-
-                        // RELACIONES (usar los campos originales del producto)
-                        proveedor: item.proveedor || "",
-                        nombreproveedor: item.nombreproveedor || "",
-                        categoria: item.categoria || "",
-                        nombrecategoria: item.nombrecategoria || "",
-                        marca: item.marca || "",
-                        nombremarca: item.nombremarca || "",
-                        unidad: item.unidad,
-                        unidadclave: item.unidadclave,
-                        unidadnombre: item.unidadnombre,
-
-                        // MONEDA E IMPUESTOS (usar los campos originales)
-                        moneda: item.moneda,
-                        nombremoneda: item.nombremoneda || "MXN",
-                        moneda_original: item.moneda_original || item.moneda,
-                        impuestos: item.impuestos,
-                        nombreimpuestos: item.nombreimpuestos,
-                        valorimpuesto: Number(item.valorimpuesto),
-
-                        // CÁLCULOS FINANCIEROS
-                        importe: importeSinImpuesto,
-                        importe_con_impuestos: importeConImpuesto,
-                        impuesto_importe: impuestoImporte,
-                        total_impuesto: impuestoImporte,
-
-                        // OTROS CAMPOS
-                        variante: item.variant || "",
-                        descuento_importe: 0,
-                        descuento_porcentaje: 0,
-                        uid: "-OUjfwh092oLaxFt0_T1",
-                        // 🧩 Selección de huecos del kit (el backend la valida y
-                        // descuenta las variantes elegidas — mismo flujo que POS)
-                        ...(item._kitSlots ? { kit_slots: item._kitSlots } : {})
-                    };
+                //
+                // 🧩 KITS CON HUECO Y CANTIDAD > 1 (v1.10.3): el backend lee kit_slots
+                // como "lo que lleva UN kit" y multiplica por la cantidad de la línea
+                // (pedidos.js: cantidad × cantidad_utilizada). Una línea de 2 combos con
+                // mezcla libre (3 XS + 5 L) no se puede expresar así, por eso la línea se
+                // ABRE EN UNA POR UNIDAD (cantidad 1) con su propio kit_slots. Cada
+                // detalle recibe su fid nuevo en insertDetail, así que no chocan en
+                // key_detalle_origen. El importe total no cambia.
+                const details = this.cart.flatMap(item => {
+                    const unidades = Array.isArray(item._kitSlotsUnidades) ? item._kitSlotsUnidades.length : 0;
+                    if (unidades > 1 && Number(item.quantity) === unidades) {
+                        return item._kitSlotsUnidades.map((slotsU, u) => {
+                            const precioU = (item._kitPreciosUnidad && item._kitPreciosUnidad[u] != null)
+                                ? Number(item._kitPreciosUnidad[u])
+                                : Number(item.precio);
+                            return this._detalleDePedido({ ...item, precio: precioU, _kitSlots: slotsU }, 1);
+                        });
+                    }
+                    return [this._detalleDePedido(item, Number(item.quantity))];
                 });
+
+                // Header cosmético: ahora una línea de N kits se abre en N detalles.
+                header.articulos = `${details.length} articulos`;
 
                 // Construir array de cobros (solo si es pago con Stripe exitoso)
                 const cobros = [];
