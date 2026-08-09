@@ -1,6 +1,13 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
+ * Versión: 1.10.4 - Huecos que se COBRAN aparte (acceso $599 + calceta $70)
+ *   · Un hueco marcado `seleccion_variante.cobrar` suma el precio de cada
+ *     variante elegida encima del precio del producto. Es por HUECO: la misma
+ *     calceta va incluida en el combo y cobrada en el acceso suelto (ARTIK).
+ *   · El selector muestra "+$70" por opción y el carrito el extra del hueco.
+ *   · El monto REAL lo recalcula el checkout seguro server-side desde el
+ *     catálogo (tiendaCheckout._precioKitSlots); esto es solo el reflejo.
  * Versión: 1.10.3 - Los huecos del combo escalan con la CANTIDAD de la línea
  *   · 2 combos de 4 calcetas = elegir 8 (mezcla libre), no las mismas 4 repetidas;
  *     2 accesos = elegir 2 tallas. El selector cuenta piezas de la LÍNEA.
@@ -742,6 +749,8 @@
                 .sacs-kit-btn-sec { background: #fff; color: #065F46; border: 1px solid #A7F3D0; }
                 .sacs-kit-resumen { margin: 0 0 8px; padding-left: 16px; color: #065F46; }
                 .sacs-kit-resumen li { margin-bottom: 2px; }
+                .sacs-kit-extra { font-weight: 700; color: #047857; white-space: nowrap; }
+                .sacs-slot-precio { font-weight: 600; color: #047857; }
                 .sacs-slot-grupo {
                     background: #F9FAFB; border: 1px solid #E5E7EB;
                     border-radius: 12px; padding: 14px; margin-bottom: 14px;
@@ -1749,7 +1758,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.3</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.4</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -1944,8 +1953,17 @@
             }
             const resumen = item._slotsDef.map(s => {
                 const sel = item._kitSlots[s.insumo_fid];
-                const partes = (sel && sel.elegidas || []).map(e => `${e.cantidad}× ${e.atributos || e.nombre}`);
-                return `<li><b>${s.padre_nombre || s.label}:</b> ${partes.join(' · ')}</li>`;
+                const elegidas = (sel && sel.elegidas) || [];
+                const partes = elegidas.map(e => `${e.cantidad}× ${e.atributos || e.nombre}`);
+                // Si este hueco se cobra, decir CUÁNTO suma (el comprador no debe
+                // descubrir el cargo hasta el total).
+                let extra = '';
+                if (s.cobrar === true) {
+                    const monto = elegidas.reduce((t, e) => t + (Number(e.precio) || 0) * (Number(e.cantidad) || 0), 0)
+                        * this._kitUnidades(item);
+                    if (monto > 0) extra = ` <span class="sacs-kit-extra">+$${monto.toFixed(2)}</span>`;
+                }
+                return `<li><b>${s.padre_nombre || s.label}:</b> ${partes.join(' · ')}${extra}</li>`;
             }).join('');
             return `
                 <div class="sacs-kit-block sacs-kit-ok">
@@ -2115,25 +2133,50 @@
             });
             item._kitSlots = kitSlots;
             item._kitSlotsUnidades = porUnidad;
-            // Kits con precio POR INSUMOS: el precio real = base + Σ(variantes
-            // elegidas). Sin esto se cobraría el snapshot congelado del catálogo
-            // aunque la selección cueste distinto. Con mezcla libre cada unidad puede
-            // costar distinto → se guarda el precio de CADA una y el carrito muestra
-            // el promedio (el cobro y el pedido usan los exactos).
-            const pricing = item._slotsPricing;
-            if (pricing && pricing.suma_insumos === true) {
-                const base = Number(pricing.precio_base) || 0;
-                item._kitPreciosUnidad = porUnidad.map(slots => {
-                    let extra = 0;
-                    Object.values(slots).forEach(sel => {
-                        (sel.elegidas || []).forEach(e => { extra += (Number(e.precio) || 0) * (Number(e.cantidad) || 0); });
-                    });
-                    return base + extra;
-                });
-                item.precio = item._kitPreciosUnidad.reduce((t, p) => t + p, 0) / unidades;
-            }
+            this._reprecioKit(item);
             this._slotPicker = null;
             this.render();
+        }
+
+        // 💰 Precio de la línea según la selección. DEBE dar lo mismo que recalcula
+        // el checkout seguro (`tiendaCheckout._precioKitSlots`) o el comprador vería
+        // un precio y pagaría otro. Dos formas de que el hueco cambie el precio:
+        //   · `pricing.suma_insumos` → la base son los insumos FIJOS y TODO hueco suma.
+        //   · hueco con `cobrar` → suma encima del precio normal del producto
+        //     (acceso $599 + calceta $70 = $669; el combo, sin la marca, sigue en
+        //     $2,999 con sus calcetas incluidas).
+        // Con mezcla libre cada unidad puede costar distinto: se guarda el precio
+        // EXACTO de cada una y el carrito muestra el promedio.
+        _reprecioKit(item) {
+            const porUnidad = item._kitSlotsUnidades;
+            if (!Array.isArray(porUnidad) || !porUnidad.length) return;
+            const pricing = item._slotsPricing || {};
+            const sumaInsumos = pricing.suma_insumos === true;
+            const cobraAlgunHueco = (item._slotsDef || []).some(s => s.cobrar === true);
+            if (!sumaInsumos && !cobraAlgunHueco) return;   // combo con todo incluido
+
+            // Qué huecos suman: con suma_insumos todos; si no, solo los marcados.
+            const suman = {};
+            (item._slotsDef || []).forEach(s => { suman[s.insumo_fid] = sumaInsumos || s.cobrar === true; });
+
+            const base = sumaInsumos
+                ? (Number(pricing.precio_base) || 0)
+                : (Number(item._precioBase != null ? item._precioBase : item.precio) || 0);
+            // Se recuerda el precio de catálogo: reprecio tras reprecio, sumar sobre
+            // el precio YA reprecioado dispararía el importe en cada cambio.
+            if (item._precioBase == null && !sumaInsumos) item._precioBase = base;
+
+            item._kitPreciosUnidad = porUnidad.map(slots => {
+                let extra = 0;
+                Object.keys(slots).forEach(insumoFid => {
+                    if (!suman[insumoFid]) return;
+                    (slots[insumoFid].elegidas || []).forEach(e => {
+                        extra += (Number(e.precio) || 0) * (Number(e.cantidad) || 0);
+                    });
+                });
+                return base + extra;
+            });
+            item.precio = item._kitPreciosUnidad.reduce((t, p) => t + p, 0) / porUnidad.length;
         }
 
         renderSlotPicker() {
@@ -2149,6 +2192,9 @@
                 const req = this._slotReq(s, item);
                 const total = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
                 const completo = total === req;
+                // ¿Este hueco se cobra aparte? (o el kit cobra por insumos, donde
+                // toda la selección suma). Si sí, cada opción muestra su precio.
+                const cobra = s.cobrar === true || (item._slotsPricing && item._slotsPricing.suma_insumos === true);
                 const ops = (s.opciones || []).map(op => {
                     const cant = Number(sel[op.variante]) || 0;
                     const topeVar = s.distintas ? unidades : req;
@@ -2157,7 +2203,7 @@
                         <div class="sacs-slot-op ${cant ? 'on' : ''} ${sinStock ? 'out' : ''}">
                             <div class="sacs-slot-op-info">
                                 <span class="sacs-slot-op-nombre">${op.atributos || op.nombre}</span>
-                                <span class="sacs-slot-op-stock">${sinStock ? 'Agotado' : (Number(op.existencia) > 0 ? op.existencia + ' disp.' : 'Disponible')}</span>
+                                <span class="sacs-slot-op-stock">${cobra && Number(op.precio) > 0 ? `<span class="sacs-slot-precio">+$${Number(op.precio).toFixed(2)}</span> · ` : ''}${sinStock ? 'Agotado' : (Number(op.existencia) > 0 ? op.existencia + ' disp.' : 'Disponible')}</span>
                             </div>
                             <div class="sacs-quantity-control">
                                 <button class="sacs-qty-btn" ${cant ? '' : 'disabled'} onclick="sacsCheckout.slotPickQty('${s.insumo_fid}','${op.variante}',-1)">−</button>
@@ -2785,6 +2831,10 @@
             if (cambia && item._slotsDef && item._slotsDef.length) {
                 delete item._kitSlotsUnidades;
                 delete item._kitPreciosUnidad;
+                // Vuelve al precio de catálogo: el extra de la selección se recalcula
+                // al confirmar de nuevo (si no, el carrito seguiría mostrando el
+                // precio con calceta de una selección que acabamos de invalidar).
+                if (item._precioBase != null) item.precio = item._precioBase;
                 // Si el selector estaba abierto sobre este item, se reabre con el
                 // requerido nuevo (si no, el contador se queda con el tope viejo).
                 if (this._slotPicker && this._slotPicker.index === index) {
