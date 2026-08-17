@@ -1,7 +1,8 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.10.5 - Carrito y selector rediseñados (más visual y vendedor)
+ * Versión: 1.10.6 - Huecos OPCIONALES: el `min` del admin se respeta (antes todo
+ *                   hueco era obligatorio y bloqueaba el checkout)
  *   · Opciones en REJILLA táctil (antes: lista vertical): toda la tarjeta suma,
  *     badge con la cantidad y botón − para quitar. Foto de la variante SOLO si
  *     distingue (en tallas todas heredan la del padre y serían 5 fotos iguales).
@@ -1835,7 +1836,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.5</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.6</span></h1>
                     ${this.currentStep === 99 ? '' : this.renderStepper()}
                 </div>
                 ${this.renderBody()}
@@ -2013,6 +2014,52 @@
             return (Number(slot.cantidad) || 0) * this._kitUnidades(item);
         }
 
+        // 🔢 CUÁNTAS piezas son OBLIGATORIAS. `min` viene de /v1/kits/slots y es el
+        // checkbox "Se puede omitir (opcional)" del admin: min=0 → el comprador puede
+        // llevarse el paquete SIN elegir (acceso $599 sin calceta). Si no viene, el
+        // default retrocompatible es "obligatorio" (min = cantidad).
+        // v1.10.6: antes TODO se medía contra `cantidad`, así que un hueco opcional
+        // pedía "Falta 1 paso" y bloqueaba Continuar. Se sanea igual que el backend
+        // (`modules/kitsSlots.js`) para no depender de un valor sucio.
+        _slotMin(slot, item) {
+            const cant = Number(slot.cantidad) || 0;
+            let m = (slot.min === undefined || slot.min === null || slot.min === '')
+                ? cant : parseInt(slot.min, 10);
+            if (isNaN(m) || m < 0) m = cant;
+            if (m > cant) m = cant;
+            return m * this._kitUnidades(item);
+        }
+
+        // ¿La selección de ESTE hueco es válida? Rango [min, cantidad], no igualdad.
+        _slotOk(slot, item, total) {
+            return total >= this._slotMin(slot, item) && total <= this._slotReq(slot, item);
+        }
+
+        // Piezas ya elegidas de un hueco, leyendo el kit_slots YA confirmado.
+        _slotTotalElegidas(item, slot) {
+            const sel = item._kitSlots && item._kitSlots[slot.insumo_fid];
+            const elegidas = (sel && Array.isArray(sel.elegidas)) ? sel.elegidas : [];
+            return elegidas.reduce((t, e) => t + (Number(e.cantidad) || 0), 0);
+        }
+
+        // El comprador que NUNCA abre el selector (porque todos los huecos son
+        // opcionales) tiene que llegar al backend con la omisión EXPLÍCITA: sin esto
+        // la línea viaja sin `kit_slots` y el pedido depende de que el backend
+        // interprete la ausencia. Idempotente: si ya hay reparto, no lo toca.
+        _normalizarSlotsOpcionales(item) {
+            if (!item._slotsDef || !item._slotsDef.length) return;
+            if (Array.isArray(item._kitSlotsUnidades) && item._kitSlotsUnidades.length) return;
+            // Solo se auto-omite si TODO lo pendiente es opcional; un hueco con
+            // mínimo real sigue exigiendo que el comprador entre al selector.
+            const todoOpcional = item._slotsDef.every(s =>
+                this._slotOk(s, item, this._slotTotalElegidas(item, s)));
+            if (!todoOpcional) return;
+            // Se parte de lo YA elegido (recortado al tope vigente), no de vacío: si
+            // el comprador subió la cantidad después de elegir, `_kitSlotsUnidades` se
+            // borra pero su selección sigue siendo válida y no hay que tirarla.
+            this._aplicarSeleccionSlots(item, this._seleccionActual(item));
+        }
+
         // Bloque bajo el item del carrito: pide personalizar o resume la selección.
         _kitBloqueHTML(item, index) {
             if (!item._slotsDef || !item._slotsDef.length || item.quantity <= 0) return '';
@@ -2036,10 +2083,14 @@
                 `;
             }
             const resumen = item._slotsDef.map(s => {
-                const sel = item._kitSlots[s.insumo_fid];
+                const sel = item._kitSlots && item._kitSlots[s.insumo_fid];
                 const elegidas = (sel && sel.elegidas) || [];
-                const chips = elegidas.map(e =>
-                    `<span class="sacs-kit-chip"><b>${e.cantidad}×</b> ${e.atributos || e.nombre}</span>`).join('');
+                // Hueco opcional que el comprador decidió no llevar: decirlo, en vez
+                // de una fila con el check y ningún chip (se leía como error).
+                const chips = elegidas.length
+                    ? elegidas.map(e =>
+                        `<span class="sacs-kit-chip"><b>${e.cantidad}×</b> ${e.atributos || e.nombre}</span>`).join('')
+                    : `<span class="sacs-kit-chip">Sin ${(s.padre_nombre || s.label || 'extras').toLowerCase()} (opcional)</span>`;
                 // Si este hueco se cobra, decir CUÁNTO suma (el comprador no debe
                 // descubrir el cargo hasta el total).
                 let extra = '';
@@ -2053,10 +2104,13 @@
                     <span class="sacs-kit-chips">${chips}${extra}</span>
                 </li>`;
             }).join('');
+            // Sin nada elegido (todo opcional omitido) el botón INVITA a agregar; decir
+            // "Cambiar selección" cuando no hay selección no le dice nada al comprador.
+            const nadaElegido = item._slotsDef.every(s => this._slotTotalElegidas(item, s) === 0);
             return `
                 <div class="sacs-kit-block sacs-kit-ok">
                     <ul class="sacs-kit-resumen">${resumen}</ul>
-                    <button class="sacs-kit-btn sacs-kit-btn-sec" onclick="sacsCheckout.openSlotPicker(${index})">Cambiar selección</button>
+                    <button class="sacs-kit-btn sacs-kit-btn-sec" onclick="sacsCheckout.openSlotPicker(${index})">${nadaElegido ? '✨ Agregar extras' : 'Cambiar selección'}</button>
                 </div>
             `;
         }
@@ -2065,28 +2119,24 @@
         // elegir, la selección deja de estar completa y el carrito vuelve a pedir
         // "Personalizar" (antes se quedaba en verde con la selección vieja y el guard
         // de Continuar la dejaba pasar).
+        // v1.10.6: se mide contra el RANGO [min, cantidad]. Un hueco opcional (min=0)
+        // con 0 elegidas ya está resuelto — antes `!item._kitSlots → false` dejaba el
+        // combo eternamente "pendiente" y el guard de Continuar reabría el selector.
         _kitResuelto(item) {
             if (!item._slotsDef || !item._slotsDef.length) return true;
-            if (!item._kitSlots) return false;
-            return item._slotsDef.every(s => {
-                const sel = item._kitSlots[s.insumo_fid];
-                if (!sel || !Array.isArray(sel.elegidas)) return false;
-                const total = sel.elegidas.reduce((t, e) => t + (Number(e.cantidad) || 0), 0);
-                return total === this._slotReq(s, item);
-            });
+            return item._slotsDef.every(s =>
+                this._slotOk(s, item, this._slotTotalElegidas(item, s)));
         }
 
-        openSlotPicker(index) {
-            const item = this.cart[index];
-            if (!item || !item._slotsDef) return;
-            // seleccion[insumo_fid][variante_fid] = cantidad (precargada si ya eligió)
+        // seleccion[insumo_fid][variante_fid] = cantidad, a partir de lo ya elegido.
+        // RECORTE: si bajó la cantidad, lo precargado puede exceder el nuevo requerido
+        // (8 elegidas y ahora solo caben 4) → el picker quedaría sobre-lleno y sin
+        // forma de confirmar. Se precarga hasta el tope.
+        _seleccionActual(item) {
             const seleccion = {};
-            item._slotsDef.forEach(s => {
+            (item._slotsDef || []).forEach(s => {
                 seleccion[s.insumo_fid] = {};
                 const prev = item._kitSlots && item._kitSlots[s.insumo_fid];
-                // RECORTE: si bajó la cantidad, lo precargado puede exceder el nuevo
-                // requerido (8 elegidas y ahora solo caben 4) → el picker quedaría
-                // sobre-lleno y sin forma de confirmar. Se precarga hasta el tope.
                 const req = this._slotReq(s, item);
                 const capVar = s.distintas ? this._kitUnidades(item) : req;
                 let acum = 0;
@@ -2095,7 +2145,13 @@
                     if (n > 0) { seleccion[s.insumo_fid][e.variante] = n; acum += n; }
                 });
             });
-            this._slotPicker = { index, seleccion };
+            return seleccion;
+        }
+
+        openSlotPicker(index) {
+            const item = this.cart[index];
+            if (!item || !item._slotsDef) return;
+            this._slotPicker = { index, seleccion: this._seleccionActual(item) };
             this.render();
         }
 
@@ -2152,9 +2208,14 @@
 
         // ¿El hueco puede completarse con el stock actual? (todas las opciones
         // agotadas, o menos opciones disponibles que las requeridas con `distintas`)
+        // v1.10.6: se compara contra el MÍNIMO. Con `cantidad` un hueco OPCIONAL sin
+        // stock (calcetas agotadas) marcaba como "agotado" al acceso de $599 que no
+        // las necesita, y le decía al comprador "quítalo del carrito".
         _slotIncompletable(item) {
             const unidades = this._kitUnidades(item);
             return (item._slotsDef || []).some(s => {
+                const min = this._slotMin(s, item);
+                if (min <= 0) return false;
                 const req = this._slotReq(s, item);
                 let capacidad = 0;
                 (s.opciones || []).forEach(op => {
@@ -2163,7 +2224,7 @@
                     // Con `distintas` cada talla cabe una vez POR KIT → tope `unidades`.
                     capacidad += s.distintas ? Math.min(unidades, stock) : stock;
                 });
-                return capacidad < req;
+                return capacidad < min;
             });
         }
 
@@ -2209,14 +2270,24 @@
             const sp = this._slotPicker;
             if (!sp) return;
             const item = this.cart[sp.index];
-            const unidades = this._kitUnidades(item);
-            // valida completitud de TODOS los huecos (contra el requerido de la LÍNEA)
+            // valida TODOS los huecos contra su rango [min, cantidad] de la LÍNEA
             const incompleto = item._slotsDef.find(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
                 const total = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
-                return total !== this._slotReq(s, item);
+                return !this._slotOk(s, item, total);
             });
             if (incompleto) return; // el botón va deshabilitado; guard extra
+            this._aplicarSeleccionSlots(item, sp.seleccion);
+            this._slotPicker = null;
+            this.render();
+        }
+
+        // Materializa una selección {insumo_fid:{variante:cant}} en el item: el
+        // kit_slots agregado (para el resumen) y el reparto POR UNIDAD (lo que viaja
+        // al backend). Separado de confirmSlotPicker para poder aplicar también la
+        // omisión automática de huecos opcionales, sin abrir el selector.
+        _aplicarSeleccionSlots(item, seleccion) {
+            const unidades = this._kitUnidades(item);
             // kit_slots AGREGADO (solo para pintar el resumen del carrito).
             const kitSlots = {};
             // kit_slots POR UNIDAD: lo que de verdad viaja al backend. `ventas.js` lee
@@ -2225,26 +2296,32 @@
             // representar: se manda UNA LÍNEA DE CANTIDAD 1 POR UNIDAD.
             const porUnidad = Array.from({ length: unidades }, () => ({}));
             item._slotsDef.forEach(s => {
-                const sel = sp.seleccion[s.insumo_fid] || {};
+                const sel = (seleccion && seleccion[s.insumo_fid]) || {};
+                const elegidas = this._elegidasDe(s, sel);
+                // `omitido: true` es la bandera que el backend exige para dejar pasar
+                // un hueco vacío (`class/ventas.js` validarSeleccionVariantes). Sin
+                // ella, unas `elegidas: []` se leen como selección faltante.
+                const omitido = elegidas.length === 0;
                 kitSlots[s.insumo_fid] = {
                     padre_fid: s.padre_fid,
                     producto: s.padre_nombre || s.label || '',
-                    elegidas: this._elegidasDe(s, sel)
+                    elegidas: elegidas,
+                    ...(omitido ? { omitido: true } : {})
                 };
                 const buckets = this._repartirSlot(sel, Number(s.cantidad) || 0, unidades);
                 buckets.forEach((b, u) => {
+                    const elegidasU = this._elegidasDe(s, b);
                     porUnidad[u][s.insumo_fid] = {
                         padre_fid: s.padre_fid,
                         producto: s.padre_nombre || s.label || '',
-                        elegidas: this._elegidasDe(s, b)
+                        elegidas: elegidasU,
+                        ...(elegidasU.length === 0 ? { omitido: true } : {})
                     };
                 });
             });
             item._kitSlots = kitSlots;
             item._kitSlotsUnidades = porUnidad;
             this._reprecioKit(item);
-            this._slotPicker = null;
-            this.render();
         }
 
         // 💰 Precio de la línea según la selección. DEBE dar lo mismo que recalcula
@@ -2294,20 +2371,35 @@
             const unidades = this._kitUnidades(item);
             const todoCompleto = item._slotsDef.every(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
-                return Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0) === this._slotReq(s, item);
+                return this._slotOk(s, item, Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0));
             });
             // Cuántas piezas faltan en TODOS los huecos: el botón lo dice en vez de
-            // un "Completa tu selección" que no explica qué falta.
+            // un "Completa tu selección" que no explica qué falta. Se mide contra el
+            // MÍNIMO: en un hueco opcional no falta nada.
             const faltanTotal = item._slotsDef.reduce((t, s) => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
                 const n = Object.values(sel).reduce((a, b) => a + (Number(b) || 0), 0);
-                return t + Math.max(0, this._slotReq(s, item) - n);
+                return t + Math.max(0, this._slotMin(s, item) - n);
             }, 0);
+            // Nada elegido y nada obligatorio → el botón debe decir que puede seguir
+            // sin elegir, que es justo lo que el comprador no sabía que podía hacer.
+            const nadaElegidoAun = item._slotsDef.every(s => {
+                const sel = sp.seleccion[s.insumo_fid] || {};
+                return Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0) === 0;
+            });
             const huecosHTML = item._slotsDef.map(s => {
                 const sel = sp.seleccion[s.insumo_fid] || {};
                 const req = this._slotReq(s, item);
+                const min = this._slotMin(s, item);
                 const total = Object.values(sel).reduce((t, n) => t + (Number(n) || 0), 0);
-                const completo = total === req;
+                // `tope` = ya no cabe una más (cierra las tarjetas). `ok` = la selección
+                // es válida (habilita confirmar). En un hueco opcional vacío `ok` es
+                // true pero `tope` es false: se puede continuar Y se puede seguir
+                // eligiendo. Con `completo = total===req` para ambas cosas, un opcional
+                // vacío habría bloqueado todas las tarjetas.
+                const tope = total >= req;
+                const ok = total >= min && total <= req;
+                const completo = tope;
                 // ¿Este hueco se cobra aparte? (o el kit cobra por insumos, donde
                 // toda la selección suma). Si sí, cada opción muestra su precio.
                 const cobra = s.cobrar === true || (item._slotsPricing && item._slotsPricing.suma_insumos === true);
@@ -2358,10 +2450,10 @@
                     <div class="sacs-slot-grupo">
                         <div class="sacs-slot-head">
                             <h3 class="sacs-slot-titulo">${s.padre_nombre || s.label}</h3>
-                            <span class="sacs-slot-prog ${completo ? 'ok' : ''}">${completo ? '✓ ' : ''}${total}/${req}</span>
+                            <span class="sacs-slot-prog ${ok ? 'ok' : ''}">${ok ? '✓ ' : ''}${total}/${req}</span>
                         </div>
-                        <div class="sacs-slot-barra ${completo ? 'ok' : ''}"><span style="width:${pct}%"></span></div>
-                        <p class="sacs-slot-hint">${completo ? '¡Listo!' : `Faltan ${faltan}`}${(s.distintas && Number(s.cantidad) > 1) ? (unidades > 1 ? ' · diferentes dentro de cada uno' : ' · deben ser diferentes') : ' · puedes repetir'}${unidades > 1 ? ` · ${s.cantidad} por cada uno de tus ${unidades}` : ''}</p>
+                        <div class="sacs-slot-barra ${ok ? 'ok' : ''}"><span style="width:${pct}%"></span></div>
+                        <p class="sacs-slot-hint">${min === 0 && total === 0 ? 'Opcional · puedes continuar sin elegir' : (ok ? '¡Listo!' : `Faltan ${min - total}`)}${(s.distintas && Number(s.cantidad) > 1) ? (unidades > 1 ? ' · diferentes dentro de cada uno' : ' · deben ser diferentes') : ' · puedes repetir'}${unidades > 1 ? ` · ${s.cantidad} por cada uno de tus ${unidades}` : ''}</p>
                         <div class="sacs-slot-grid">${ops}</div>
                         ${llenarHTML}
                     </div>
@@ -2376,7 +2468,7 @@
                     <h2 class="sacs-page-title">Personaliza: ${item.nombre}</h2>
                     ${huecosHTML}
                     <button class="sacs-btn sacs-btn-primary" style="width:100%; margin-top: 12px;" ${todoCompleto ? '' : 'disabled'} onclick="sacsCheckout.confirmSlotPicker()">
-                        ${todoCompleto ? '✓ Confirmar selección' : `Te faltan ${faltanTotal}`}
+                        ${!todoCompleto ? `Te faltan ${faltanTotal}` : (nadaElegidoAun ? 'Continuar sin extras' : '✓ Confirmar selección')}
                     </button>
                 </div>
             `;
@@ -2859,6 +2951,12 @@
                         // (si no, el pedido caería en kit_slots_pendiente en el backend).
                         // Combos incompletables por stock se sacan solos del carrito
                         // (cantidad 0) para no atrapar al comprador en un selector muerto.
+                        // Huecos OPCIONALES que el comprador nunca abrió: se marcan
+                        // omitidos explícitamente aquí, el punto por el que pasa todo
+                        // pedido, para que la línea viaje con `kit_slots` completo.
+                        this.cart.forEach(it => {
+                            if (it.quantity > 0) this._normalizarSlotsOpcionales(it);
+                        });
                         let huboAgotado = false;
                         this.cart.forEach((it, i) => {
                             if (it._slotsDef && it._slotsDef.length && it.quantity > 0 && !this._kitResuelto(it) && this._slotIncompletable(it)) {
