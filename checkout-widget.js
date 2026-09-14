@@ -297,6 +297,13 @@
                         this.config.defaultConfig = config.defaultConfig;
                     }
 
+                    // URL opcional a la que el cliente puede volver tras completar su compra
+                    // (su página de "gracias"/campaña). Se valida que sea http(s) real, nunca
+                    // un esquema ejecutable (ver uso en renderSuccess: solo va en href, nunca en
+                    // un onclick/eval con el valor crudo).
+                    const redirectUrl = typeof config.redirectUrl === 'string' ? config.redirectUrl.trim() : '';
+                    this.config.redirectUrl = /^https?:\/\//i.test(redirectUrl) ? redirectUrl : null;
+
                     console.log('✓ Configuración de eCommerce cargada desde MongoDB');
                 }
             } catch (error) {
@@ -2694,9 +2701,24 @@
                                 </div>
                             </div>
                         </div>
+
+                        ${this.config.redirectUrl ? `
+                        <a href="${this._escAttr(this.config.redirectUrl)}" class="sacs-btn sacs-btn-primary" style="display:block; text-align:center; text-decoration:none; margin-top: 24px; box-sizing: border-box;">
+                            Continuar
+                        </a>
+                        ` : ''}
                     </div>
                 </div>
             `;
+        }
+
+        /** Escapa un valor para usarlo dentro de un atributo HTML (ej. href). */
+        _escAttr(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
         }
 
         renderPaymentError() {
