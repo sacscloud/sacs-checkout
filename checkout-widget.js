@@ -3908,16 +3908,15 @@
             }
         }
 
-        // Arma el BORRADOR del pedido { account, header, details, cobros } que consumen los
-        // endpoints seguros crear-pago (para recalcular el monto) y crear-pedido (crea la nota).
-        // El backend PISA todo lo monetario (precios/impuestos/total) desde el catálogo real;
-        // estos importes viajan solo como respaldo/UX. NO hace la petición HTTP.
         // 🔐 Identidad de checkout (SOP-151628). Las cuentas MIGRADAS a sacs5 exigen en `crear-pago` y `crear-pedido` un
         // `checkout_id` + `checkout_identity` firmados por el servidor (sin ellos responden 401 CHECKOUT_IDENTIDAD_INVALIDA).
         // Se piden con `POST /tienda/:account/checkout/identidad`; la identidad dura 30 min y se RENUEVA mandando la anterior,
         // lo que conserva el mismo `checkout_id` (crear-pago y crear-pedido deben compartirlo). Las cuentas que siguen en
-        // sacs3 contestan 404 `CHECKOUT_IDENTIDAD_NO_DISPONIBLE`: ahí el cuerpo NO cambia (igual que hoy). Cualquier otro
-        // fallo detiene el pago con un mensaje claro, igual que la tienda.
+        // sacs3 contestan 404 `CHECKOUT_IDENTIDAD_NO_DISPONIBLE`: ahí el cuerpo NO cambia (igual que hoy).
+        // Este paso es NUEVO y el widget vive en tiendas de clientes de sacs3, así que un fallo del propio paso (sin red, tiempo agotado,
+        // 5xx, o un 404 sin ese código, p. ej. una revisión del servidor sin la ruta) NO detiene el pago: el cuerpo sale sin identidad (o con la
+        // que aún esté vigente) y `crear-pago` decide; una cuenta migrada recibiría entonces el 401 de hoy, sin empeorar nada. Solo se corta
+        // el pago si el servidor contesta 2xx con un cuerpo inválido o un 4xx distinto de 404.
         async _conIdentidadCheckout(payload) {
             const cuenta = this.config.accountId;
             if (!cuenta) throw new Error('No se pudo determinar la cuenta de la tienda.');
@@ -3934,11 +3933,22 @@
                 }
                 if (this._identidadCheckoutNuevaCompra) cuerpo.new_cart = true;
 
-                const response = await fetch(`${SACS_API_URL}/tienda/${encodeURIComponent(cuenta)}/checkout/identidad`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(cuerpo)
-                });
+                const conPrevia = () => (previa && Number.isFinite(vence) && vence > Date.now() && !this._identidadCheckoutNuevaCompra)
+                    ? Object.assign({}, payload, { checkout_id: previa.checkout_id, checkout_identity: previa.checkout_identity })
+                    : payload;
+                const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+                const reloj = ctl ? setTimeout(() => ctl.abort(), 8000) : null;
+                let response;
+                try {
+                    response = await fetch(`${SACS_API_URL}/tienda/${encodeURIComponent(cuenta)}/checkout/identidad`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(cuerpo),
+                        signal: ctl ? ctl.signal : undefined
+                    });
+                } catch (e) {
+                    return conPrevia(); // sin red o tiempo agotado: no detiene el pago
+                } finally { if (reloj) clearTimeout(reloj); }
                 const resultado = await response.json().catch(() => null);
 
                 if (response.status === 404 && resultado && resultado.code === 'CHECKOUT_IDENTIDAD_NO_DISPONIBLE') {
@@ -3946,6 +3956,9 @@
                     this._identidadCheckout = null;
                     return payload;
                 }
+                // 5xx, o un 404 sin el código esperado (servidor sin la ruta): el fallo es del paso nuevo, no de la compra. No se marca la
+                // cuenta como de sacs3 (puede ser pasajero): la próxima compra lo intenta otra vez.
+                if (response.status >= 500 || response.status === 404) return conPrevia();
                 const d = resultado && resultado.data;
                 if (!response.ok || !resultado || resultado.success !== true || !d
                     || typeof d.checkout_id !== 'string' || typeof d.checkout_identity !== 'string'
@@ -3961,6 +3974,10 @@
             });
         }
 
+        // Arma el BORRADOR del pedido { account, header, details, cobros } que consumen los
+        // endpoints seguros crear-pago (para recalcular el monto) y crear-pedido (crea la nota).
+        // El backend PISA todo lo monetario (precios/impuestos/total) desde el catálogo real;
+        // estos importes viajan solo como respaldo/UX. NO hace la petición HTTP.
         buildPedidoPayload(paymentIntentId, paymentStatus, total, firmaBase64 = null) {
             {
                 const now = Date.now();
