@@ -1,7 +1,9 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.10.6 - Huecos OPCIONALES: el `min` del admin se respeta (antes todo
+ * Versión: 1.10.7 - Identidad de checkout para cuentas MIGRADAS a sacs5 (SOP-151628): crear-pago y crear-pedido
+ *                   mandan checkout_id + checkout_identity; las cuentas de sacs3 no cambian.
+ * Versión anterior: 1.10.6 - Huecos OPCIONALES: el `min` del admin se respeta (antes todo
  *                   hueco era obligatorio y bloqueaba el checkout)
  *   · Opciones en REJILLA táctil (antes: lista vertical): toda la tarjeta suma,
  *     badge con la cantidad y botón − para quitar. Foto de la variante SOLO si
@@ -3803,7 +3805,7 @@
                 //    (header + details) y el backend RECALCULA el total desde el catálogo real
                 //    y crea el PaymentIntent con ESE monto. Reemplaza al viejo
                 //    `/stripe/:account/create-payment` (401 en estricto + confiaba en `amount`).
-                const borrador = this.buildPedidoPayload(null, 'pending', total, null);
+                const borrador = await this._conIdentidadCheckout(this.buildPedidoPayload(null, 'pending', total, null));
 
                 const response = await fetch(`${SACS_API_URL}/tienda/${encodeURIComponent(this.config.accountId)}/checkout/crear-pago`, {
                     method: 'POST',
@@ -3904,6 +3906,73 @@
                 btnText.style.display = 'block';
                 btnSpinner.style.display = 'none';
             }
+        }
+
+        // 🔐 Identidad de checkout (SOP-151628). Las cuentas MIGRADAS a sacs5 exigen en `crear-pago` y `crear-pedido` un
+        // `checkout_id` + `checkout_identity` firmados por el servidor (sin ellos responden 401 CHECKOUT_IDENTIDAD_INVALIDA).
+        // Se piden con `POST /tienda/:account/checkout/identidad`; la identidad dura 30 min y se RENUEVA mandando la anterior,
+        // lo que conserva el mismo `checkout_id` (crear-pago y crear-pedido deben compartirlo). Las cuentas que siguen en
+        // sacs3 contestan 404 `CHECKOUT_IDENTIDAD_NO_DISPONIBLE`: ahí el cuerpo NO cambia (igual que hoy).
+        // Este paso es NUEVO y el widget vive en tiendas de clientes de sacs3, así que un fallo del propio paso (sin red, tiempo agotado,
+        // 5xx, o un 404 sin ese código, p. ej. una revisión del servidor sin la ruta) NO detiene el pago: el cuerpo sale sin identidad (o con la
+        // que aún esté vigente) y `crear-pago` decide; una cuenta migrada recibiría entonces el 401 de hoy, sin empeorar nada. Solo se corta
+        // el pago si el servidor contesta 2xx con un cuerpo inválido o un 4xx distinto de 404.
+        async _conIdentidadCheckout(payload) {
+            const cuenta = this.config.accountId;
+            if (!cuenta) throw new Error('No se pudo determinar la cuenta de la tienda.');
+            if (this._checkoutLegacy) return payload;
+
+            const previa = this._identidadCheckout || null;
+            const vence = previa ? Date.parse(previa.expires_at) : NaN;
+            const vigente = previa && Number.isFinite(vence) && vence - Date.now() > 60000 && !this._identidadCheckoutNuevaCompra;
+            if (!vigente) {
+                const cuerpo = {};
+                if (previa) {
+                    cuerpo.visitor_identity = previa.visitor_identity;
+                    cuerpo.checkout_identity = previa.checkout_identity;
+                }
+                if (this._identidadCheckoutNuevaCompra) cuerpo.new_cart = true;
+
+                const conPrevia = () => (previa && Number.isFinite(vence) && vence > Date.now() && !this._identidadCheckoutNuevaCompra)
+                    ? Object.assign({}, payload, { checkout_id: previa.checkout_id, checkout_identity: previa.checkout_identity })
+                    : payload;
+                const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+                const reloj = ctl ? setTimeout(() => ctl.abort(), 8000) : null;
+                let response;
+                try {
+                    response = await fetch(`${SACS_API_URL}/tienda/${encodeURIComponent(cuenta)}/checkout/identidad`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(cuerpo),
+                        signal: ctl ? ctl.signal : undefined
+                    });
+                } catch (e) {
+                    return conPrevia(); // sin red o tiempo agotado: no detiene el pago
+                } finally { if (reloj) clearTimeout(reloj); }
+                const resultado = await response.json().catch(() => null);
+
+                if (response.status === 404 && resultado && resultado.code === 'CHECKOUT_IDENTIDAD_NO_DISPONIBLE') {
+                    this._checkoutLegacy = true;
+                    this._identidadCheckout = null;
+                    return payload;
+                }
+                // 5xx, o un 404 sin el código esperado (servidor sin la ruta): el fallo es del paso nuevo, no de la compra. No se marca la
+                // cuenta como de sacs3 (puede ser pasajero): la próxima compra lo intenta otra vez.
+                // 408 (tiempo agotado) y 429 (demasiadas peticiones) tampoco son del comprador: no detienen el pago.
+                if (response.status >= 500 || response.status === 404 || response.status === 408 || response.status === 429) return conPrevia();
+                const d = resultado && resultado.data;
+                if (!response.ok || !resultado || resultado.success !== true || !d
+                    || typeof d.checkout_id !== 'string' || typeof d.checkout_identity !== 'string'
+                    || typeof d.visitor_identity !== 'string' || typeof d.expires_at !== 'string') {
+                    throw new Error((resultado && resultado.msg) || 'No se pudo preparar el checkout. Intenta de nuevo.');
+                }
+                this._identidadCheckout = d;
+                this._identidadCheckoutNuevaCompra = false;
+            }
+            return Object.assign({}, payload, {
+                checkout_id: this._identidadCheckout.checkout_id,
+                checkout_identity: this._identidadCheckout.checkout_identity
+            });
         }
 
         // Arma el BORRADOR del pedido { account, header, details, cobros } que consumen los
@@ -4085,7 +4154,7 @@
             const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
 
             try {
-                const pedidoObject = this.buildPedidoPayload(paymentIntentId, paymentStatus, total, firmaBase64);
+                const pedidoObject = await this._conIdentidadCheckout(this.buildPedidoPayload(paymentIntentId, paymentStatus, total, firmaBase64));
                 // El backend deduce el proveedor 'stripe' del header.stripe_payment_intent_id;
                 // se manda también a nivel raíz por claridad/robustez.
                 pedidoObject.paymentIntentId = paymentIntentId;
@@ -4114,6 +4183,7 @@
                 if (folio) {
                     console.log('✓ Pedido creado exitosamente:', data);
                     this.orderId = `PED-${folio}`;
+                    this._identidadCheckoutNuevaCompra = true;
 
                     // 📧 Enviar correo de confirmación al cliente (no bloqueante)
                     this.sendOrderEmail(folio).catch(err => {
@@ -4168,7 +4238,7 @@
                 }
                 console.log('🔁 Reintentando crear-pedido (idempotente) para:', paymentIntentId);
 
-                const pedidoObject = { ...this._lastPedidoPayload, paymentIntentId: paymentIntentId };
+                const pedidoObject = await this._conIdentidadCheckout({ ...this._lastPedidoPayload, paymentIntentId: paymentIntentId });
                 const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(this.config.accountId)}/checkout/crear-pedido`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
