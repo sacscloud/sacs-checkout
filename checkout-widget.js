@@ -3958,7 +3958,8 @@
                 }
                 // 5xx, o un 404 sin el código esperado (servidor sin la ruta): el fallo es del paso nuevo, no de la compra. No se marca la
                 // cuenta como de sacs3 (puede ser pasajero): la próxima compra lo intenta otra vez.
-                if (response.status >= 500 || response.status === 404) return conPrevia();
+                // 408 (tiempo agotado) y 429 (demasiadas peticiones) tampoco son del comprador: no detienen el pago.
+                if (response.status >= 500 || response.status === 404 || response.status === 408 || response.status === 429) return conPrevia();
                 const d = resultado && resultado.data;
                 if (!response.ok || !resultado || resultado.success !== true || !d
                     || typeof d.checkout_id !== 'string' || typeof d.checkout_identity !== 'string'
