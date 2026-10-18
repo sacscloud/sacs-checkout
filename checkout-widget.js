@@ -220,7 +220,7 @@
         }
 
         async loadEcommerceConfig(accountId, configId = null) {
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
                 // Construir el filtro: si hay configId, filtrar por id, sino solo por account
@@ -323,7 +323,7 @@
             // llamada: el estado público de Stripe (connected/accountId/livemode, SIN el
             // secret `sk_`), los `defaults` (almacén/sucursal/tipoCliente) y el `branding`.
             // Reemplaza a los viejos loadStripeConfig + loadAccountDefaults.
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
                 const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/store-config`, {
@@ -361,7 +361,7 @@
         }
 
         async loadPlantillaContratos(accountId) {
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
                 // 🔒 Candado JWT (2026-07-28): `plantillas_contratos` trae datos INTERNOS
@@ -1979,7 +1979,7 @@
         // p._slotsChecked distingue "verificado sin huecos" de "fetch falló" (para
         // reintentar en open()).
         async hidratarSlotsKits(accountId) {
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const API_URL = 'https://api.sacscloud.com/v1';
             const almacen = (this.config.accountDefaults && this.config.accountDefaults.almacen && this.config.accountDefaults.almacen.key)
                 || (this.config.defaultConfig && this.config.defaultConfig.almacen) || null;
             await Promise.all((this.config.products || []).map(async p => {
@@ -4151,7 +4151,7 @@
         // idempotente por PaymentIntent. Reemplaza al viejo `/pedidos/createPedido` (401 en
         // estricto + confiaba en los importes del front).
         async createOrder(paymentIntentId, paymentStatus, total, firmaBase64 = null) {
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
                 const pedidoObject = await this._conIdentidadCheckout(this.buildPedidoPayload(paymentIntentId, paymentStatus, total, firmaBase64));
@@ -4229,7 +4229,7 @@
             // devuelve el mismo folio; si el pago se confirmó pero el pedido nunca se creó
             // (típico corte de Safari/iOS), lo crea ahora RE-verificando el pago con Stripe.
             // Reintentamos con el borrador guardado.
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
                 if (!this._lastPedidoPayload) {
@@ -4270,7 +4270,7 @@
         async getSucursalLogo(accountId, sucursalFid) {
             // 🔒 Candado JWT: `sucursales` es colección de vitrina → se lee por el gateway
             // público `/tienda/:account/data/sucursales/aggregate` (el `/rest/*` da 401).
-            const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+            const API_URL = 'https://api.sacscloud.com/v1';
 
             try {
                 const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/data/sucursales/aggregate`, {
@@ -4310,7 +4310,7 @@
             // el pedido ya se creó y el backend también dispara `pedido_nuevo`; el
             // .catch() de arriba traga cualquier fallo.
             try {
-                const API_URL = 'https://sacs-api-819604817289.us-central1.run.app/v1';
+                const API_URL = 'https://api.sacscloud.com/v1';
                 const correo = this.customerInfo && this.customerInfo.correo;
                 if (!correo) return { success: false, error: 'sin correo del comprador' };
 
