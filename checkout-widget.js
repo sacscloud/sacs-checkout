@@ -1,7 +1,12 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.10.7 - Identidad de checkout para cuentas MIGRADAS a sacs5 (SOP-151628): crear-pago y crear-pedido
+ * Versión: 1.10.8 - Menos peticiones al API (sin cambio visible para el comprador):
+ *   · Los GET ya no mandan `Content-Type` → peticiones simples, sin preflight OPTIONS.
+ *   · Los huecos de los kits (`POST /kits/slots`) se piden al ABRIR el carrito, no al cargar.
+ *   · Foto de producto: se usa la del config si la trae; si no, se pide UNA vez por
+ *     producto y se comparte entre todos los botones de la página.
+ * Versión anterior: 1.10.7 - Identidad de checkout para cuentas MIGRADAS a sacs5 (SOP-151628): crear-pago y crear-pedido
  *                   mandan checkout_id + checkout_identity; las cuentas de sacs3 no cambian.
  * Versión anterior: 1.10.6 - Huecos OPCIONALES: el `min` del admin se respeta (antes todo
  *                   hueco era obligatorio y bloqueaba el checkout)
@@ -68,6 +73,11 @@
         test: 'pk_test_Ls9VQXrAnzRk6noFPCBi0Ch100WhEkuCSN',
         live: 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5'
     };
+
+    // 🖼️ Fotos de producto ya pedidas en esta página (compartida por TODAS las
+    // instancias del widget): `cuenta|key|tipo` → Promise<url|null>.
+    const _cacheImagenes = new Map();
+    const _urlImagenValida = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : null;
 
     class SacsCheckout {
         constructor() {
@@ -189,11 +199,10 @@
             console.log('🎨 Estilos drawer:', this.config.drawerStyles);
             console.log('🎨 Estilos botón checkout:', this.config.checkoutButtonStyles);
 
-            // 🧩 KITS/COMBOS con huecos de variante (v1.10): hidratar DESPUÉS del
-            // override de options.products, sobre el array FINAL (Mongo o embed).
-            if (options.accountId) {
-                await this.hidratarSlotsKits(options.accountId);
-            }
+            // 🧩 KITS/COMBOS con huecos de variante (v1.10): los huecos YA NO se piden
+            // al cargar la página. Casi nadie abre el carrito y cada kit costaba un
+            // POST /kits/slots (+ su OPTIONS) por visita. Se piden en open() (y, si
+            // aún faltan, al dar "Continuar"), sobre el array FINAL (Mongo o embed).
 
             // Inicializar carrito con productos preconfigurados
             // Usar cantidadDefault del producto si está configurada, sino 1
@@ -271,7 +280,9 @@
                     this.config.products = await Promise.all((config.products || []).map(async p => {
                         // Para variantes, usar id_producto (padre) como key de imagen si existe
                         const imageKey = p._esVariante && p.id_producto ? p.id_producto : p.fid;
-                        const imageUrl = p.imagen || await this.loadProductImage(accountId, imageKey, p.tipo);
+                        // Si el config ya trae la foto (`imagen`, o `imageUrl` guardada) se usa tal
+                        // cual; solo si no, se pide al API (una vez por producto en la página).
+                        const imageUrl = p.imagen || _urlImagenValida(p.imageUrl) || await this.loadProductImage(accountId, imageKey, p.tipo);
 
                         // Agregar la imagen cargada al producto sin modificar nada más
                         return {
@@ -327,8 +338,10 @@
 
             try {
                 const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/store-config`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
+                    // Sin `headers`: un GET sin cuerpo no lleva Content-Type, y ponérselo
+                    // convierte la petición en "no simple" → el navegador manda un
+                    // preflight OPTIONS antes de cada URL distinta.
+                    method: 'GET'
                 });
 
                 const result = await response.json();
@@ -371,8 +384,10 @@
                 // ACTIVA de pedidos, proyectada a lo que el widget necesita para renderizar y
                 // firmar el contrato (contenido, cláusulas, empresa impresa, campos, requiereFirma).
                 const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/checkout/contrato-config`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
+                    // Sin `headers`: un GET sin cuerpo no lleva Content-Type, y ponérselo
+                    // convierte la petición en "no simple" → el navegador manda un
+                    // preflight OPTIONS antes de cada URL distinta.
+                    method: 'GET'
                 });
 
                 const result = await response.json();
@@ -398,39 +413,43 @@
             return this.config.plantillaContratos.config.general.requiereFirma === true;
         }
 
-        async loadProductImage(accountId, productKey, productType) {
+        loadProductImage(accountId, productKey, productType) {
+            // 🖼️ Memoria de la PÁGINA: una tienda con varios botones (varias instancias)
+            // repite productos entre ellos, y antes cada botón pedía otra vez la misma foto.
+            // Se guarda la PROMESA para que dos pedidos simultáneos compartan la misma
+            // petición. Un fallo de red NO se guarda: el siguiente botón lo vuelve a intentar.
+            const tipo = productType || 'Producto Simple';
+            const k = `${accountId}|${productKey}|${tipo}`;
+            if (_cacheImagenes.has(k)) return _cacheImagenes.get(k);
+            const pr = this._fetchProductImage(accountId, productKey, tipo).catch(error => {
+                _cacheImagenes.delete(k);
+                console.error('Error cargando imagen del producto:', error);
+                return null;
+            });
+            _cacheImagenes.set(k, pr);
+            return pr;
+        }
+
+        async _fetchProductImage(accountId, productKey, productType) {
             // 🔒 Candado JWT (2026-07-28): el viejo POST `/articulos/getImagen` (con `account`
             // en el body) daba 401 en estricto. Se usa el endpoint público estructurado
             // `GET /tienda/:account/articulo-imagen?key=...&tipo=...`, que reusa la MISMA lógica
             // de selección de foto del catálogo (principal → orden → papá → grupo) y solo
             // devuelve la URL (dato público). Best-effort: cae a placeholder si falla.
             const API_URL = 'https://api.sacscloud.com/v1';
+            const qs = `key=${encodeURIComponent(productKey)}&tipo=${encodeURIComponent(productType)}`;
+            const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/articulo-imagen?${qs}`, {
+                // Sin Content-Type: GET simple, sin preflight OPTIONS (ver loadStoreConfig).
+                method: 'GET'
+            });
 
-            try {
-                const qs = `key=${encodeURIComponent(productKey)}&tipo=${encodeURIComponent(productType || 'Producto Simple')}`;
-                const response = await fetch(`${API_URL}/tienda/${encodeURIComponent(accountId)}/articulo-imagen?${qs}`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Error al obtener imagen del producto');
-                }
-
-                const data = await response.json();
-
-                if (data.success && data.data) {
-                    return data.data;
-                } else {
-                    // Si no hay imagen, retornar null (usaremos placeholder)
-                    return null;
-                }
-            } catch (error) {
-                console.error('Error cargando imagen del producto:', error);
-                return null;
+            if (!response.ok) {
+                throw new Error('Error al obtener imagen del producto');
             }
+
+            const data = await response.json();
+            // Si no hay imagen, null (usaremos placeholder). "Sin foto" SÍ se guarda.
+            return (data.success && data.data) ? data.data : null;
         }
 
         getProductInitial(productName) {
@@ -1754,25 +1773,10 @@
             this._slotPicker = null;   // nunca reabrir con un selector colgado de la sesión anterior
             this.render();
 
-            // 🧩 Reintento de huecos: si un kit potencial quedó sin verificar
-            // (falló el fetch en init), reintentar ahora y sincronizar el carrito.
-            // Sin esto, un 500 transitorio degrada el combo a producto simple
-            // toda la sesión y el pedido caería a kit_slots_pendiente.
-            const sinVerificar = (this.config.products || []).some(p =>
-                (p.tiene_hueco_variante === true || p.tipo === 'Producto Compuesto') && !p._slotsChecked);
-            if (sinVerificar && this.config.accountId) {
-                this.hidratarSlotsKits(this.config.accountId).then(() => {
-                    (this.config.products || []).forEach(p => {
-                        const it = this.cart.find(c => c.fid === p.fid);
-                        if (it && p._slotsChecked) {
-                            it._slotsChecked = true;
-                            if (p._slotsDef) it._slotsDef = p._slotsDef;
-                            if (p._slotsPricing) it._slotsPricing = p._slotsPricing;
-                        }
-                    });
-                    if (this.isOpen && this.currentStep === 1 && !this._slotPicker) this.render();
-                }).catch(() => {});
-            }
+            // 🧩 Huecos de los kits: se piden AQUÍ, al abrir el carrito (ya no en init).
+            // Si un fetch falla, el siguiente open() o el "Continuar" lo reintenta: un
+            // 500 transitorio no debe degradar el combo a producto simple.
+            this._asegurarSlotsKits().catch(() => {});
 
             // Abrir con animación
             requestAnimationFrame(() => {
@@ -1978,6 +1982,30 @@
         // realmente descuenta el pedido, no la suma de todas.
         // p._slotsChecked distingue "verificado sin huecos" de "fetch falló" (para
         // reintentar en open()).
+        _hayKitsSinVerificar() {
+            return (this.config.products || []).some(p =>
+                (p.tiene_hueco_variante === true || p.tipo === 'Producto Compuesto') && !p._slotsChecked);
+        }
+
+        // Pide los huecos que falten (una sola petición en vuelo a la vez), los copia
+        // al carrito y repinta el paso 1 si sigue a la vista.
+        _asegurarSlotsKits() {
+            if (this._slotsEnVuelo) return this._slotsEnVuelo;
+            if (!this.config.accountId || !this._hayKitsSinVerificar()) return Promise.resolve();
+            this._slotsEnVuelo = this.hidratarSlotsKits(this.config.accountId).then(() => {
+                (this.config.products || []).forEach(p => {
+                    const it = this.cart.find(c => c.fid === p.fid);
+                    if (it && p._slotsChecked) {
+                        it._slotsChecked = true;
+                        if (p._slotsDef) it._slotsDef = p._slotsDef;
+                        if (p._slotsPricing) it._slotsPricing = p._slotsPricing;
+                    }
+                });
+                if (this.isOpen && this.currentStep === 1 && !this._slotPicker) this.render();
+            }).finally(() => { this._slotsEnVuelo = null; });
+            return this._slotsEnVuelo;
+        }
+
         async hidratarSlotsKits(accountId) {
             const API_URL = 'https://api.sacscloud.com/v1';
             const almacen = (this.config.accountDefaults && this.config.accountDefaults.almacen && this.config.accountDefaults.almacen.key)
@@ -2971,6 +2999,25 @@
                     e.stopPropagation();
 
                     if (this.currentStep === 1) {
+                        // 🧩 Los huecos se piden al abrir: si el comprador da "Continuar"
+                        // antes de que lleguen (o falló la primera vez), se esperan aquí y
+                        // se repite el clic — nunca pasa un combo como producto simple
+                        // solo por ser rápido. Un solo reintento por clic.
+                        if (this._hayKitsSinVerificar() && !payBtn._esperoHuecos) {
+                            payBtn._esperoHuecos = true;
+                            payBtn.disabled = true;
+                            this._asegurarSlotsKits().catch(() => {}).then(() => {
+                                // render() pudo reemplazar el botón: se busca el vigente
+                                // y solo se re-habilita el MISMO que se deshabilitó aquí.
+                                if (payBtn.isConnected) payBtn.disabled = false;
+                                const btn = document.getElementById('sacs-pay-btn');
+                                if (!btn || btn.disabled || !this.isOpen || this.currentStep !== 1) return;
+                                btn._esperoHuecos = true;
+                                btn.click();
+                                btn._esperoHuecos = false;
+                            });
+                            return;
+                        }
                         // 🧩 Guard de kits: no avanzar con combos sin personalizar
                         // (si no, el pedido caería en kit_slots_pendiente en el backend).
                         // Combos incompletables por stock se sacan solos del carrito
