@@ -71,7 +71,6 @@
     // ====== STRIPE - LLAVES ======
     // Stripe Platform Publishable Keys - Direct Charges con Stripe Connect
     // El modo (test/producción) se lee de la configuración de la cuenta en MongoDB
-    // texto pendiente de calificación de Marisol
     const TEXTO_SIN_PAGO_EN_LINEA = 'Por ahora el pago en línea no está disponible. Escríbenos y te ayudamos a completar tu compra.';
 
     const STRIPE_KEYS = {
@@ -361,10 +360,10 @@
                 const stripe = data.stripe || {};
                 this.config.stripeTestMode = stripe.livemode !== true;
                 this.config.stripeAccountId = stripe.accountId || null;
-                // Mismo criterio con el que se ofrece la tarjeta: hay cuenta Stripe y no está
-                // marcada `connected:false`. (Un store-config sin el campo `connected` se
-                // sigue comportando como hasta ahora.)
-                this.config.stripeConnected = !!stripe.accountId && stripe.connected !== false;
+                // Mismo criterio de master (loadStripe): se ofrece la tarjeta con solo tener
+                // `accountId`. El campo `connected` NO se lee: una tienda con accountId y
+                // connected:false hoy cobra y debe seguir cobrando.
+                this.config.stripeConnected = !!stripe.accountId;
                 // El único medio en línea que soporta el widget es Stripe (tarjeta): Mercado
                 // Pago/PayPal/OXXO/SPEI no tienen flujo aquí (el ícono de PayPal es decorativo).
                 this.config.contactoTienda = this._extraerContactoTienda(data);

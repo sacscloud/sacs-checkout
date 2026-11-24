@@ -110,6 +110,12 @@ test('Stripe con accountId y sin campo connected → flujo de siempre', async ()
     });
 });
 
+test('Stripe con accountId y connected:false → flujo de siempre (igual que master, no se bloquea)', async () => {
+    await correr({ stripe: { connected: false, accountId: 'acct_x', livemode: true }, defaults: {}, branding: {} }, async (page) => {
+        assert.equal((await sinPago(page)).aviso, null);
+    });
+});
+
 test('processPayment sin Stripe: mensaje claro, sin excepción', async () => {
     await correr({ stripe: { connected: true, accountId: 'acct_x' }, defaults: {}, branding: {} }, async (page, errores) => {
         await page.evaluate(() => { window.sacsCheckout.goToStep(4); window.sacsCheckout.getInstance('c1').stripe = null; });
