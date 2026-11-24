@@ -1,7 +1,9 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.10.8 - Menos peticiones al API (sin cambio visible para el comprador):
+ * Versión: 1.10.9 - Sin medio de pago en línea conectado: aviso (con contacto de la tienda) en lugar de
+ *   pedir datos y firma; nunca se llama a confirmCardPayment sin Stripe inicializado.
+ * Versión anterior: 1.10.8 - Menos peticiones al API (sin cambio visible para el comprador):
  *   · Los GET ya no mandan `Content-Type` → peticiones simples, sin preflight OPTIONS.
  *   · Los huecos de los kits (`POST /kits/slots`) se piden al ABRIR el carrito, no al cargar.
  *   · Foto de producto: se usa la del config si la trae; si no, se pide UNA vez por
@@ -69,6 +71,10 @@
     // ====== STRIPE - LLAVES ======
     // Stripe Platform Publishable Keys - Direct Charges con Stripe Connect
     // El modo (test/producción) se lee de la configuración de la cuenta en MongoDB
+
+    // texto pendiente de calificación de Marisol
+    const TEXTO_SIN_PAGO_EN_LINEA = 'Por ahora el pago en línea no está disponible. Escríbenos y te ayudamos a completar tu compra.';
+
     const STRIPE_KEYS = {
         test: 'pk_test_Ls9VQXrAnzRk6noFPCBi0Ch100WhEkuCSN',
         live: 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5'
@@ -356,6 +362,13 @@
                 const stripe = data.stripe || {};
                 this.config.stripeTestMode = stripe.livemode !== true;
                 this.config.stripeAccountId = stripe.accountId || null;
+                // Mismo criterio de master (loadStripe): se ofrece la tarjeta con solo tener
+                // `accountId`. El campo `connected` NO se lee: una tienda con accountId y
+                // connected:false hoy cobra y debe seguir cobrando.
+                this.config.stripeConnected = !!stripe.accountId;
+                // El único medio en línea que soporta el widget es Stripe (tarjeta): Mercado
+                // Pago/PayPal/OXXO/SPEI no tienen flujo aquí (el ícono de PayPal es decorativo).
+                this.config.contactoTienda = this._extraerContactoTienda(data);
                 console.log('✓ Stripe Account ID:', this.config.stripeAccountId);
                 console.log('✓ Stripe Test Mode:', this.config.stripeTestMode);
 
@@ -371,6 +384,50 @@
             } catch (error) {
                 console.error('Error cargando configuración de tienda:', error);
             }
+        }
+
+        // Contacto de la tienda que ya trae la configuración (WhatsApp/teléfono/correo).
+        // Se lee de forma defensiva; si no hay nada, queda vacío y solo se muestra el texto.
+        _extraerContactoTienda(data) {
+            const fuentes = [data && data.contacto, data && data.contact, data && data.branding, data && data.defaults, data]
+                .filter(f => f && typeof f === 'object');
+            const pick = (...claves) => {
+                for (const f of fuentes) {
+                    for (const k of claves) {
+                        const v = f[k];
+                        if (typeof v === 'string' && v.trim()) return v.trim();
+                    }
+                }
+                return '';
+            };
+            return {
+                whatsapp: pick('whatsapp', 'whatsApp', 'telefonoWhatsapp'),
+                telefono: pick('telefono', 'phone', 'tel'),
+                correo: pick('correo', 'email', 'mail')
+            };
+        }
+
+        // ¿Hay al menos un medio de pago en línea conectado? (hoy: solo Stripe)
+        hayMedioDePagoEnLinea() {
+            return this.config.stripeConnected === true;
+        }
+
+        renderSinPagoEnLinea() {
+            const esc = (t) => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            const c = this.config.contactoTienda || {};
+            const lineas = [];
+            const wa = c.whatsapp ? c.whatsapp.replace(/[^\d]/g, '') : '';
+            if (c.whatsapp) lineas.push(`<p><strong>WhatsApp:</strong> ${wa ? `<a href="https://wa.me/${wa}" target="_blank" rel="noopener" style="color:inherit">${esc(c.whatsapp)}</a>` : esc(c.whatsapp)}</p>`);
+            if (c.telefono) lineas.push(`<p><strong>Teléfono:</strong> ${esc(c.telefono)}</p>`);
+            if (c.correo) lineas.push(`<p><strong>Correo:</strong> <a href="mailto:${esc(c.correo)}" style="color:inherit">${esc(c.correo)}</a></p>`);
+            return `
+                <div class="sacs-drawer-body" data-sacs-sin-pago="1">
+                    <div style="padding:16px;line-height:1.5;">
+                        <p>${esc(TEXTO_SIN_PAGO_EN_LINEA)}</p>
+                        ${lineas.join('')}
+                    </div>
+                </div>
+            `;
         }
 
         async loadPlantillaContratos(accountId) {
@@ -512,6 +569,11 @@
         }
 
         async loadStripe() {
+            // Sin medio conectado no se inicializa Stripe (ni se espera el accountId).
+            if (!this.hayMedioDePagoEnLinea()) {
+                console.warn('Stripe no está conectado para esta tienda; no se inicializa.');
+                return;
+            }
             // Esperar si todavía no tenemos el stripeAccountId
             let attempts = 0;
             while (!this.config.stripeAccountId && attempts < 50) {
@@ -1849,12 +1911,18 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.6</span></h1>
-                    ${this.currentStep === 99 ? '' : this.renderStepper()}
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.9</span></h1>
+                    ${(this.currentStep === 99 || this._sinPagoActivo()) ? '' : this.renderStepper()}
                 </div>
-                ${this.renderBody()}
-                ${this.renderFooter()}
+                ${this._sinPagoActivo() ? this.renderSinPagoEnLinea() : this.renderBody()}
+                ${this._sinPagoActivo() ? '' : this.renderFooter()}
             `;
+        }
+
+        // Aviso en lugar del flujo (antes de datos y firma). No aplica a la confirmación (5)
+        // ni al error post-pago (99), que solo existen si ya hubo un pago.
+        _sinPagoActivo() {
+            return !this.hayMedioDePagoEnLinea() && this.currentStep < 5;
         }
 
         renderStepper() {
@@ -3109,6 +3177,7 @@
         initStripeElements() {
             if (!this.stripe) {
                 console.error('Stripe no está cargado');
+                this.showError(TEXTO_SIN_PAGO_EN_LINEA);
                 return;
             }
 
@@ -3831,6 +3900,12 @@
             const btnSpinner = document.getElementById('sacs-btn-spinner');
             const payBtn = document.getElementById('sacs-pay-btn');
             const errorContainer = document.getElementById('sacs-error-container');
+
+            // Sin Stripe inicializado nunca se intenta cobrar (ni crear el pago).
+            if (!this.stripe || !this.cardElement) {
+                this.showError(TEXTO_SIN_PAGO_EN_LINEA);
+                return;
+            }
 
             // Validar que la info del cliente ya esté capturada (desde paso 2)
             if (!this.validateCustomerInfo()) {
