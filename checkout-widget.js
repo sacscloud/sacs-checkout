@@ -71,6 +71,8 @@
     // ====== STRIPE - LLAVES ======
     // Stripe Platform Publishable Keys - Direct Charges con Stripe Connect
     // El modo (test/producción) se lee de la configuración de la cuenta en MongoDB
+
+    // texto pendiente de calificación de Marisol
     const TEXTO_SIN_PAGO_EN_LINEA = 'Por ahora el pago en línea no está disponible. Escríbenos y te ayudamos a completar tu compra.';
 
     const STRIPE_KEYS = {
