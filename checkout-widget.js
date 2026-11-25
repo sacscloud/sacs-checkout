@@ -1,7 +1,11 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.10.9 - Sin medio de pago en línea conectado: aviso (con contacto de la tienda) en lugar de
+ * Versión: 1.10.10 - Cuentas MIGRADAS a sacs5: si la consulta del contrato FALLA (red, no 2xx o success:false) ya no se
+ *   trata como «sin contrato»: se reintenta antes del pago y, si sigue fallando, se muestra un error con «Reintentar» y NO
+ *   se llama a crear-pago (antes se cobraba sin firma y el pedido se rechazaba después). `data:null` con success:true sigue
+ *   siendo «sin contrato». Cuentas de sacs3: sin cambio.
+ * Versión anterior: 1.10.9 - Sin medio de pago en línea conectado: aviso (con contacto de la tienda) en lugar de
  *   pedir datos y firma; nunca se llama a confirmCardPayment sin Stripe inicializado.
  * Versión anterior: 1.10.8 - Menos peticiones al API (sin cambio visible para el comprador):
  *   · Los GET ya no mandan `Content-Type` → peticiones simples, sin preflight OPTIONS.
@@ -379,6 +383,8 @@
                 } else {
                     console.warn('⚠️ store-config sin `defaults`; el checkout puede fallar al crear el pedido');
                 }
+                // Marca de cuenta migrada a sacs5 (la publica store-config). Solo con ella un fallo del contrato bloquea el pago.
+                this.config.cuentaSacs5 = data.cuentaSacs5 === true;
                 this.config.branding = data.branding || {};
                 console.log('✓ Branding cargado:', this.config.branding);
             } catch (error) {
@@ -447,20 +453,74 @@
                     method: 'GET'
                 });
 
-                const result = await response.json();
+                // Respuesta no 2xx (p. ej. 503 CONTRATO_PENDIENTE_DE_MIGRAR) o cuerpo ilegible = FALLO, no «sin contrato».
+                let result = null;
+                try { result = await response.json(); } catch (_) { result = null; }
+                const respondio = !!(response.ok && result && result.success === true);
 
                 // El endpoint devuelve `data` como OBJETO (la plantilla) o null.
-                if (result.success && result.data) {
+                if (respondio && result.data) {
                     this.config.plantillaContratos = result.data;
+                    this.config.contratoNoVerificado = false;
                     console.log('✓ Plantilla de contratos cargada:', this.config.plantillaContratos.nombre);
-                } else {
+                } else if (respondio) {
                     console.log('ℹ️ No hay plantilla de contratos activa configurada para envío en pedidos');
                     this.config.plantillaContratos = null;
+                    this.config.contratoNoVerificado = false;
+                } else {
+                    this._contratoFallo(`HTTP ${response.status}`);
                 }
             } catch (error) {
                 console.error('Error cargando plantilla de contratos:', error);
-                this.config.plantillaContratos = null;
+                this._contratoFallo('red');
             }
+        }
+
+        // Fallo al consultar el contrato. Solo en cuentas migradas (cuentaSacs5) bloquea el avance; en sacs3 todo sigue como siempre.
+        _contratoFallo(motivo) {
+            this.config.plantillaContratos = null;
+            if (this.config.cuentaSacs5 === true) {
+                this.config.contratoNoVerificado = true;
+                console.error('⚠️ No se pudo verificar el contrato de la tienda (' + motivo + ')');
+            }
+        }
+
+        // Garantiza que el contrato esté verificado ANTES de decidir la firma o cobrar. Reintenta (3 intentos con pausa corta);
+        // devuelve false si sigue sin poder verificarse. En cuentas de sacs3 devuelve true sin hacer nada.
+        async _asegurarContrato() {
+            if (this.config.cuentaSacs5 !== true || !this.config.contratoNoVerificado) return true;
+            for (let i = 0; i < 3; i++) {
+                if (i > 0) await new Promise(r => setTimeout(r, 400 * i));
+                await this.loadPlantillaContratos(this.config.accountId);
+                if (!this.config.contratoNoVerificado) return true;
+            }
+            return false;
+        }
+
+        // Candado de reentrancia del intento de pago / paso a firma. Se toma ANTES del primer await (un doble clic con la
+        // consulta del contrato caída lanzaría dos procesos en paralelo → dos crear-pago). Devuelve un token o null si ya
+        // hay un intento en curso. Se suelta SIEMPRE en finally y al cerrar el drawer; el token evita que un intento viejo
+        // suelte el candado de uno nuevo.
+        _tomarCandado() {
+            if (this._candadoPago) return null;
+            this._candadoPago = {};
+            return this._candadoPago;
+        }
+
+        _soltarCandado(token) {
+            if (token && this._candadoPago === token) this._candadoPago = null;
+        }
+
+        _mostrarErrorContrato(alReintentar) {
+            const c = document.getElementById('sacs-error-container');
+            if (!c) return;
+            c.innerHTML = `<div class="sacs-error-message" data-sacs-contrato-error>No pudimos cargar el contrato de tu compra. No se ha hecho ningún cobro. Intenta de nuevo. <button type="button" class="sacs-btn" data-sacs-contrato-reintentar>Reintentar</button></div>`;
+            const b = c.querySelector('[data-sacs-contrato-reintentar]');
+            if (b) b.addEventListener('click', async () => {
+                b.disabled = true;
+                if (await this._asegurarContrato()) { c.innerHTML = ''; if (alReintentar) alReintentar(); }
+                else this._mostrarErrorContrato(alReintentar);
+            });
         }
 
         requiereFirma() {
@@ -1858,6 +1918,7 @@
 
             if (overlay) overlay.classList.remove('active');
             if (drawer) drawer.classList.remove('active');
+            this._candadoPago = null; // nunca dejar al comprador atorado al cerrar
 
             setTimeout(() => {
                 this.isOpen = false;
@@ -3061,7 +3122,7 @@
             console.log('Attach listeners - payBtn:', payBtn, 'currentStep:', this.currentStep);
 
             if (payBtn) {
-                payBtn.addEventListener('click', (e) => {
+                payBtn.addEventListener('click', async (e) => {
                     console.log('Click en botón - currentStep:', this.currentStep);
                     e.preventDefault();
                     e.stopPropagation();
@@ -3118,6 +3179,10 @@
                     } else if (this.currentStep === 2) {
                         // Paso 2: Capturar info y decidir siguiente paso
                         console.log('Capturando info del cliente...');
+                        const candado = this._tomarCandado();
+                        if (!candado) return; // ya hay un intento en curso (doble clic)
+                        payBtn.disabled = true;
+                        try {
 
                         // Capturar info del formulario
                         this.customerInfo = {
@@ -3146,6 +3211,12 @@
                             return;
                         }
 
+                        // Cuenta migrada: sin contrato verificado no se avanza (ni a firma ni a pago).
+                        if (!(await this._asegurarContrato())) {
+                            this._mostrarErrorContrato(() => payBtn.click());
+                            return;
+                        }
+
                         // Decidir: ¿Requiere firma?
                         if (this.requiereFirma()) {
                             console.log('Ir a paso 3 (firma)');
@@ -3153,6 +3224,10 @@
                         } else {
                             console.log('Ir a paso 4 (pago)');
                             this.goToStep(4);
+                        }
+                        } finally {
+                            this._soltarCandado(candado);
+                            if (payBtn.isConnected) payBtn.disabled = false;
                         }
 
                     } else if (this.currentStep === 4) {
@@ -3896,6 +3971,21 @@
         // ==================== FIN MÉTODOS DEL CANVAS DE FIRMA ====================
 
         async processPayment() {
+            const candado = this._tomarCandado();
+            if (!candado) return; // ya hay un intento de pago en curso (doble clic)
+            const botonInicial = document.getElementById('sacs-pay-btn');
+            if (botonInicial) botonInicial.disabled = true;
+            try {
+                await this._procesarPago();
+            } finally {
+                this._soltarCandado(candado);
+                // Si el botón sigue en pantalla (error, contrato caído, cancelación) nunca queda deshabilitado.
+                const b = document.getElementById('sacs-pay-btn');
+                if (b && b.isConnected) b.disabled = false;
+            }
+        }
+
+        async _procesarPago() {
             const btnText = document.getElementById('sacs-btn-text');
             const btnSpinner = document.getElementById('sacs-btn-spinner');
             const payBtn = document.getElementById('sacs-pay-btn');
@@ -3910,6 +4000,12 @@
             // Validar que la info del cliente ya esté capturada (desde paso 2)
             if (!this.validateCustomerInfo()) {
                 this.showError('Error: Información del cliente no encontrada');
+                return;
+            }
+
+            // Cuenta migrada: nunca se crea el pago si el contrato no se pudo verificar (el pedido se rechazaría sin firma).
+            if (!(await this._asegurarContrato())) {
+                this._mostrarErrorContrato(() => this.processPayment());
                 return;
             }
 
