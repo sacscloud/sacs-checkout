@@ -497,6 +497,20 @@
             return false;
         }
 
+        // Candado de reentrancia del intento de pago / paso a firma. Se toma ANTES del primer await (un doble clic con la
+        // consulta del contrato caída lanzaría dos procesos en paralelo → dos crear-pago). Devuelve un token o null si ya
+        // hay un intento en curso. Se suelta SIEMPRE en finally y al cerrar el drawer; el token evita que un intento viejo
+        // suelte el candado de uno nuevo.
+        _tomarCandado() {
+            if (this._candadoPago) return null;
+            this._candadoPago = {};
+            return this._candadoPago;
+        }
+
+        _soltarCandado(token) {
+            if (token && this._candadoPago === token) this._candadoPago = null;
+        }
+
         _mostrarErrorContrato(alReintentar) {
             const c = document.getElementById('sacs-error-container');
             if (!c) return;
@@ -1904,6 +1918,7 @@
 
             if (overlay) overlay.classList.remove('active');
             if (drawer) drawer.classList.remove('active');
+            this._candadoPago = null; // nunca dejar al comprador atorado al cerrar
 
             setTimeout(() => {
                 this.isOpen = false;
@@ -3164,6 +3179,10 @@
                     } else if (this.currentStep === 2) {
                         // Paso 2: Capturar info y decidir siguiente paso
                         console.log('Capturando info del cliente...');
+                        const candado = this._tomarCandado();
+                        if (!candado) return; // ya hay un intento en curso (doble clic)
+                        payBtn.disabled = true;
+                        try {
 
                         // Capturar info del formulario
                         this.customerInfo = {
@@ -3205,6 +3224,10 @@
                         } else {
                             console.log('Ir a paso 4 (pago)');
                             this.goToStep(4);
+                        }
+                        } finally {
+                            this._soltarCandado(candado);
+                            if (payBtn.isConnected) payBtn.disabled = false;
                         }
 
                     } else if (this.currentStep === 4) {
@@ -3948,6 +3971,21 @@
         // ==================== FIN MÉTODOS DEL CANVAS DE FIRMA ====================
 
         async processPayment() {
+            const candado = this._tomarCandado();
+            if (!candado) return; // ya hay un intento de pago en curso (doble clic)
+            const botonInicial = document.getElementById('sacs-pay-btn');
+            if (botonInicial) botonInicial.disabled = true;
+            try {
+                await this._procesarPago();
+            } finally {
+                this._soltarCandado(candado);
+                // Si el botón sigue en pantalla (error, contrato caído, cancelación) nunca queda deshabilitado.
+                const b = document.getElementById('sacs-pay-btn');
+                if (b && b.isConnected) b.disabled = false;
+            }
+        }
+
+        async _procesarPago() {
             const btnText = document.getElementById('sacs-btn-text');
             const btnSpinner = document.getElementById('sacs-btn-spinner');
             const payBtn = document.getElementById('sacs-pay-btn');
