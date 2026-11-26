@@ -1,7 +1,10 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.10.10 - Cuentas MIGRADAS a sacs5: si la consulta del contrato FALLA (red, no 2xx o success:false) ya no se
+ * Versión: 1.10.11 - SOP-158776: con varios contenedores/botones (varios init con el mismo accountId/configId) los controles del
+ *   carrito («+», «−», quitar, avisos de complementos, cerrar) actúan sobre la instancia que abrió el carrito, no sobre la última
+ *   creada; cerrar y volver a abrir desde el mismo botón ya funciona. Un solo contenedor: sin cambio.
+ * Versión anterior: 1.10.10 - Cuentas MIGRADAS a sacs5: si la consulta del contrato FALLA (red, no 2xx o success:false) ya no se
  *   trata como «sin contrato»: se reintenta antes del pago y, si sigue fallando, se muestra un error con «Reintentar» y NO
  *   se llama a crear-pago (antes se cobraba sin firma y el pedido se rechazaba después). `data:null` con success:true sigue
  *   siendo «sin contrato». Cuentas de sacs3: sin cambio.
@@ -1891,6 +1894,8 @@
             if (this.isOpen) return;
 
             this.isOpen = true;
+            // Los onclick del drawer llaman a sacsCheckout.X() sin id: deben actuar sobre ESTA instancia.
+            if (window.sacsCheckout) window.sacsCheckout._activa = this;
             this.currentStep = 1;
             this._slotPicker = null;   // nunca reabrir con un selector colgado de la sesión anterior
             this.render();
@@ -1972,7 +1977,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.9</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.11</span></h1>
                     ${(this.currentStep === 99 || this._sinPagoActivo()) ? '' : this.renderStepper()}
                 </div>
                 ${this._sinPagoActivo() ? this.renderSinPagoEnLinea() : this.renderBody()}
@@ -4811,6 +4816,15 @@
         },
 
         /**
+         * Instancia que abrió el carrito (la de los controles del drawer: «+», «−», quitar,
+         * cerrar, selector de huecos). Con varios contenedores NO es la última creada (SOP-158776).
+         * @returns {SacsCheckout|null}
+         */
+        _getActiva() {
+            return (this._activa && this._activa.isOpen) ? this._activa : this._getLastInstance();
+        },
+
+        /**
          * Abre el drawer de una instancia específica
          * @param {string} id - containerId o configId de la instancia (opcional, si no se pasa usa la última)
          *
@@ -4832,7 +4846,7 @@
          * @param {string} id - ID de la instancia (opcional, si no se pasa usa la última)
          */
         close(id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.close();
         },
 
@@ -4843,7 +4857,7 @@
          * @param {string} id - ID de la instancia (opcional)
          */
         updateQuantity(index, quantity, id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.updateQuantity(index, quantity);
         },
 
@@ -4853,7 +4867,7 @@
          * @param {string} id - ID de la instancia (opcional)
          */
         goToStep(step, id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.goToStep(step);
         },
 
@@ -4862,7 +4876,7 @@
          * @param {string} id - ID de la instancia (opcional)
          */
         volverDesdePago(id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.volverDesdePago();
         },
 
@@ -4871,7 +4885,7 @@
          * @param {string} id - ID de la instancia (opcional)
          */
         openDocumentPreview(id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.openDocumentPreview();
         },
 
@@ -4880,7 +4894,7 @@
          * @param {string} id - ID de la instancia (opcional)
          */
         closeDocumentPreview(id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.closeDocumentPreview();
         },
 
@@ -4889,7 +4903,7 @@
          * @param {string} id - ID de la instancia (opcional)
          */
         onTermsChange(id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.onTermsChange();
         },
 
@@ -4899,31 +4913,31 @@
          * @param {string} id - ID de la instancia (opcional)
          */
         openSlotPicker(index, id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.openSlotPicker(index);
         },
 
         /** 🧩 Cierra el selector de huecos sin confirmar */
         cancelSlotPicker(id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.cancelSlotPicker();
         },
 
         /** 🧩 Suma/resta una variante dentro de un hueco del selector */
         slotPickQty(insumoFid, varianteFid, delta, id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.slotPickQty(insumoFid, varianteFid, delta);
         },
 
         /** 🧩 "Todas iguales": llena lo que falta del hueco con una sola variante */
         slotFill(insumoFid, varianteFid, id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.slotFill(insumoFid, varianteFid);
         },
 
         /** 🧩 Confirma la selección de todos los huecos del kit */
         confirmSlotPicker(id) {
-            const instance = id ? this.getInstance(id) : this._getLastInstance();
+            const instance = id ? this.getInstance(id) : this._getActiva();
             if (instance) instance.confirmSlotPicker();
         },
 
