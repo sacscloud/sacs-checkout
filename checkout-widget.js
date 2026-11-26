@@ -1,7 +1,8 @@
 /**
  * SACS Embedded Checkout Widget
  * Plugin standalone para integrar carrito + checkout en cualquier sitio web
- * Versión: 1.10.11 - SOP-158776: con varios contenedores/botones (varios init con el mismo accountId/configId) los controles del
+ * Versión: 1.10.12 - SOP-158780: la llave publicable de PRUEBA estaba vencida (api_key_expired); la de producción no cambia.
+ * Versión anterior: 1.10.11 - SOP-158776: con varios contenedores/botones (varios init con el mismo accountId/configId) los controles del
  *   carrito («+», «−», quitar, avisos de complementos, cerrar) actúan sobre la instancia que abrió el carrito, no sobre la última
  *   creada; cerrar y volver a abrir desde el mismo botón ya funciona. Un solo contenedor: sin cambio.
  * Versión anterior: 1.10.10 - Cuentas MIGRADAS a sacs5: si la consulta del contrato FALLA (red, no 2xx o success:false) ya no se
@@ -83,7 +84,7 @@
     const TEXTO_SIN_PAGO_EN_LINEA = 'Por ahora el pago en línea no está disponible. Escríbenos y te ayudamos a completar tu compra.';
 
     const STRIPE_KEYS = {
-        test: 'pk_test_Ls9VQXrAnzRk6noFPCBi0Ch100WhEkuCSN',
+        test: 'pk_test_51EcFDsH8R01DIGGxoA5mGg1SSGEVeMKAE9fGUf96NmZPnvLHeXcJq8ZaooZvnrRQiY6hcf0NpCG63hqn1WLkR62P00HfzNdfQ3',
         live: 'pk_live_l7yPQkiwvj4tLItBtOGu3SeY00hN8yONF5'
     };
 
@@ -1977,7 +1978,7 @@
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.11</span></h1>
+                    <h1 class="sacs-drawer-title">${this.currentStep === 99 ? 'Atención Requerida' : 'Carrito de Compras'} <span style="font-size: 14px; opacity: 0.5; font-weight: 400;">v1.10.12</span></h1>
                     ${(this.currentStep === 99 || this._sinPagoActivo()) ? '' : this.renderStepper()}
                 </div>
                 ${this._sinPagoActivo() ? this.renderSinPagoEnLinea() : this.renderBody()}
